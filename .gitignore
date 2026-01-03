@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Data files (large files that shouldn't be in git)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/annotations/*.bed
+*.txt.gz
+*.tsv.gz
+*.bed.gz
+*.bam
+*.bai
+
+# Model files (large trained models)
+models/*.keras
+models/*.h5
+models/*.hdf5
+models/*.pb
+models/*.ckpt
+!models/.gitkeep
+
+# Results
+results/*
+!results/.gitkeep
+!results/plots/.gitkeep
+!results/metrics/.gitkeep
+!results/predictions/.gitkeep
+
+# Logs
+*.log
+logs/
+wandb/
+tensorboard/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Custom
+*.backup
+*.old
+scratch/

@@ -1,0 +1,76 @@
+# Configuration for ORI Detection Model Training
+
+experiment_name: "ori_detection_expert"
+
+# Data paths and loading
+data:
+  base_dir: "data/raw"
+  run_dirs:
+    - "NM30_plot_data_1strun_xy"
+    - "NM30_plot_data_2ndrun_xy"
+  ori_bed: "data/raw/DNAscent_Col0_NM30_ColCEN_ORIs_curated_final.bed"
+
+  # Genomic regions (for per-region evaluation)
+  centromere_bed: "data/annotations/centromere.bed"
+  pericentromere_bed: "data/annotations/pericentromere_clean.bed"
+
+# Preprocessing parameters
+preprocessing:
+  oversample_ratio: 0.5  # Oversample ORI reads by 50%
+  percentile: 100  # Use 100th percentile for max sequence length (no truncation)
+  use_enhanced_encoding: true  # Use 9-channel encoding (true) or 6-channel (false)
+  random_seed: 42
+
+# Model architecture
+model:
+  type: "ori_expert"  # Options: "ori_expert", "ori_simple"
+  max_length: null  # Auto-determined from data if null
+  n_channels: 9  # 9 for enhanced, 6 for basic
+  cnn_filters: 64
+  lstm_units: 128
+  dropout_rate: 0.3
+
+# Training parameters
+training:
+  epochs: 150
+  batch_size: 32
+  learning_rate: 0.0005
+  test_size: 0.2  # Train/val split
+
+  # Loss function
+  loss:
+    type: "focal"  # Options: "focal", "binary_crossentropy"
+    alpha: 0.25  # Focal loss alpha parameter
+    gamma: 2.0   # Focal loss gamma parameter
+
+  # Callbacks
+  early_stopping:
+    enabled: true
+    monitor: "val_loss"
+    patience: 25
+    mode: "min"
+
+  reduce_lr:
+    enabled: true
+    monitor: "val_loss"
+    factor: 0.5
+    patience: 10
+    min_lr: 1.0e-7
+
+  checkpoint:
+    enabled: true
+    monitor: "val_loss"
+    save_best_only: true
+
+# Output paths
+output:
+  model_dir: "models"
+  model_filename: "ori_expert_model.keras"
+  results_dir: "results/ori_expert"
+  plots_dir: "results/ori_expert/plots"
+  metrics_dir: "results/ori_expert/metrics"
+
+# Evaluation
+evaluation:
+  threshold: 0.5  # Probability threshold for binary classification
+  per_region_analysis: true  # Perform per-region evaluation
