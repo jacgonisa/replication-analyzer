@@ -47,6 +47,9 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/annotations/*.bed
+!data/examples/
+!data/examples/*.bed
+!data/examples/*.md
 *.txt.gz
 *.tsv.gz
 *.bed.gz

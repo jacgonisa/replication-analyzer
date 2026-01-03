@@ -17,6 +17,32 @@ This package provides modular, reproducible pipelines for:
 - ✅ **Regional Analysis**: Per-region evaluation (centromere, pericentromere, arms)
 - ✅ **Config-based**: Easy to reproduce and modify experiments
 
+## 📸 Gallery
+
+### Workflow Overview
+
+Complete pipeline from data input to annotation:
+
+![Workflow](docs/images/workflow.png)
+
+### Model Architecture
+
+Expert Model: Multi-scale CNN + Bidirectional LSTM + Self-Attention
+
+![Architecture](docs/images/architecture.png)
+
+### Training Progress
+
+Example training history showing convergence:
+
+![Training History](docs/images/training_history.png)
+
+### Prediction Example
+
+Model prediction on a single read showing ORI detection:
+
+![Example Prediction](docs/images/example_prediction.png)
+
 ## Installation
 
 ```bash
