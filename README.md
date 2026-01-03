@@ -258,6 +258,12 @@ replication-analyzer/
 - Target: ~1:1 read-level balance
 - Handles segment-level imbalance with Focal Loss
 
+## 📖 Documentation
+
+- **[USAGE_GUIDE.md](USAGE_GUIDE.md)** - Complete step-by-step guide for training and annotation
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical deep-dive: signal encoding & model architecture
+- **[Example Data](data/examples/)** - Small BED files demonstrating annotation format
+
 ## For Collaborators
 
 ### Analyzing New Fork Data
