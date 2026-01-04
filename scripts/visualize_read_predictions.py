@@ -2,23 +2,19 @@
 """
 Visualize read predictions matching notebook style.
 
-Shows XY signal with:
-- Top panel: Original signal with ground truth annotations
-- Bottom panel: Original signal with model predictions
-Direct visual comparison between truth and predictions.
+Uses twin axes to show:
+- Main axis: XY signal with shaded true fork regions
+- Twin axis: Prediction probabilities for left/right forks
 """
 
 import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-sns.set_style("whitegrid")
 
 
 def load_xy_signal(read_id, run, xy_base_dir):
@@ -31,12 +27,12 @@ def load_xy_signal(read_id, run, xy_base_dir):
     }
 
     if run not in run_map:
-        return None, None, None
+        return None, None
 
     xy_file = Path(xy_base_dir) / run_map[run] / f"plot_data_{read_id}.txt"
 
     if not xy_file.exists():
-        return None, None, None
+        return None, None
 
     try:
         # Load XY data
@@ -48,12 +44,13 @@ def load_xy_signal(read_id, run, xy_base_dir):
         return None, None
 
 
-def plot_read_comparison(read_id, predictions_df, xy_base_dir, save_path):
+def plot_fork_prediction_single_read(read_id, predictions_df, xy_base_dir, ax):
     """
-    Plot read with ground truth vs predictions side-by-side.
+    Plot predictions on a single read matching notebook style.
 
-    Top panel: Ground truth annotations
-    Bottom panel: Model predictions
+    Uses twin axes:
+    - Main axis: Signal + shaded true fork regions
+    - Twin axis: Prediction probabilities
     """
     # Get predictions for this read
     read_preds = predictions_df[predictions_df['read_id'] == read_id].copy()
@@ -70,99 +67,104 @@ def plot_read_comparison(read_id, predictions_df, xy_base_dir, save_path):
         print(f"Could not load XY signal for {read_id} from run {run}")
         return False
 
-    # Create figure with 2 subplots
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(20, 10), sharex=True)
+    # Sort read_preds by start position to match signal
+    read_preds = read_preds.sort_values('start').reset_index(drop=True)
 
-    # Class colors matching the notebook
-    colors = {0: '#808080', 1: '#FF4444', 2: '#44AA44'}  # gray, red, green
-    class_names = {0: 'Background', 1: 'Left Fork', 2: 'Right Fork'}
+    # Plot signal on main axis
+    ax_signal = ax
+    ax_signal.plot(xy_data['start'], xy_data['signal'], 'k-',
+                  linewidth=1, alpha=0.5, label='Signal')
 
-    # Calculate stats
-    n_total = len(read_preds)
-    n_correct = (read_preds['y_true'] == read_preds['predicted_class']).sum()
-    accuracy = n_correct / n_total * 100
+    # Overlay true fork regions (using BED regions, not segment-wise)
+    # Find contiguous regions for each class
+    def find_contiguous_regions(df, class_id):
+        """Find contiguous regions of a class from segment predictions."""
+        class_mask = df['y_true'] == class_id
+        regions = []
 
-    # ============= PANEL 1: GROUND TRUTH =============
-    # Plot XY signal
-    ax1.plot(xy_data['start'], xy_data['signal'], 'k-', linewidth=1, alpha=0.5, zorder=1)
+        if not class_mask.any():
+            return regions
 
-    # Overlay ground truth regions
-    for idx, row in read_preds.iterrows():
-        color = colors[row['y_true']]
-        ax1.axvspan(row['start'], row['end'], alpha=0.3, color=color, zorder=2)
+        start_idx = None
+        for idx in range(len(df)):
+            if class_mask.iloc[idx]:
+                if start_idx is None:
+                    start_idx = idx
+            else:
+                if start_idx is not None:
+                    regions.append((df.iloc[start_idx]['start'], df.iloc[idx-1]['end']))
+                    start_idx = None
 
-    # Add legend
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor=colors[0], alpha=0.3, label='Background'),
-        Patch(facecolor=colors[1], alpha=0.3, label='Left Fork'),
-        Patch(facecolor=colors[2], alpha=0.3, label='Right Fork')
-    ]
-    ax1.legend(handles=legend_elements, loc='upper right', fontsize=11, framealpha=0.9)
+        # Handle case where region extends to end
+        if start_idx is not None:
+            regions.append((df.iloc[start_idx]['start'], df.iloc[-1]['end']))
 
-    ax1.set_ylabel('Signal Intensity', fontsize=12, fontweight='bold')
-    ax1.set_title(f'{chrom} - Read: {read_id}\nGround Truth Annotations',
-                  fontsize=14, fontweight='bold', pad=10)
-    ax1.grid(True, alpha=0.3)
-    ax1.set_ylim([0, 1])
+        return regions
 
-    # ============= PANEL 2: PREDICTIONS =============
-    # Plot XY signal
-    ax2.plot(xy_data['start'], xy_data['signal'], 'k-', linewidth=1, alpha=0.5, zorder=1)
+    # Overlay true left forks (blue)
+    left_regions = find_contiguous_regions(read_preds, 1)
+    for i, (start, end) in enumerate(left_regions):
+        ax_signal.axvspan(start, end, alpha=0.3,
+                        color='blue', label='True Left Fork' if i == 0 else '')
 
-    # Overlay predictions
-    for idx, row in read_preds.iterrows():
-        color = colors[row['predicted_class']]
-        ax2.axvspan(row['start'], row['end'], alpha=0.3, color=color, zorder=2)
+    # Overlay true right forks (orange)
+    right_regions = find_contiguous_regions(read_preds, 2)
+    for i, (start, end) in enumerate(right_regions):
+        ax_signal.axvspan(start, end, alpha=0.3,
+                        color='orange', label='True Right Fork' if i == 0 else '')
 
-    # Mark errors with red outlines
-    errors = read_preds[read_preds['y_true'] != read_preds['predicted_class']]
-    for idx, row in errors.iterrows():
-        ax2.axvspan(row['start'], row['end'],
-                   alpha=0, edgecolor='red', linewidth=3, zorder=3)
+    # Create twin axis for predictions
+    ax_pred = ax_signal.twinx()
 
-    # Add legend
-    ax2.legend(handles=legend_elements, loc='upper right', fontsize=11, framealpha=0.9)
+    # Extract probabilities (columns: class_0_prob, class_1_prob, class_2_prob)
+    prob_left = read_preds['class_1_prob'].values
+    prob_right = read_preds['class_2_prob'].values
+    positions = read_preds['start'].values
 
-    ax2.set_ylabel('Signal Intensity', fontsize=12, fontweight='bold')
-    ax2.set_xlabel('Genomic Position (bp)', fontsize=12, fontweight='bold')
-    ax2.set_title(f'Model Predictions (Accuracy: {accuracy:.1f}% - {n_correct}/{n_total} correct)',
-                  fontsize=14, fontweight='bold', pad=10)
-    ax2.grid(True, alpha=0.3)
-    ax2.set_ylim([0, 1])
+    # Plot probabilities for left and right
+    ax_pred.plot(positions, prob_left, 'b-',
+                linewidth=2, label='P(Left Fork)', alpha=0.7)
+    ax_pred.plot(positions, prob_right, 'orange',
+                linewidth=2, label='P(Right Fork)', alpha=0.7)
+    ax_pred.axhline(y=0.5, color='red', linestyle='--',
+                   linewidth=1, alpha=0.5, label='Threshold')
 
-    # Format x-axis
-    ax2.ticklabel_format(style='plain', axis='x')
+    # Highlight predicted regions using fill_between
+    is_left_pred = read_preds['predicted_class'] == 1
+    is_right_pred = read_preds['predicted_class'] == 2
 
-    # Add stats box
-    stats_text = f'Read Statistics:\n'
-    stats_text += f'Total segments: {n_total}\n'
-    stats_text += f'Correct: {n_correct}\n'
-    stats_text += f'Errors: {n_total - n_correct}\n'
-    stats_text += f'Accuracy: {accuracy:.1f}%\n\n'
+    ax_pred.fill_between(positions, 0, 1,
+                        where=is_left_pred, alpha=0.2,
+                        color='blue', label='Predicted Left')
+    ax_pred.fill_between(positions, 0, 1,
+                        where=is_right_pred, alpha=0.2,
+                        color='orange', label='Predicted Right')
 
-    # Count by class
-    true_counts = read_preds['y_true'].value_counts().to_dict()
-    pred_counts = read_preds['predicted_class'].value_counts().to_dict()
+    # Labels
+    ax_signal.set_xlabel('Genomic Position', fontsize=11)
+    ax_signal.set_ylabel('Signal Intensity', fontsize=11, color='black')
+    ax_pred.set_ylabel('Fork Probability', fontsize=11, color='black')
+    ax_pred.set_ylim([0, 1])
 
-    stats_text += 'Ground Truth:\n'
-    for cls in [0, 1, 2]:
-        if cls in true_counts:
-            stats_text += f'  {class_names[cls]}: {true_counts[cls]}\n'
+    # Title with stats
+    n_left_true = len(left_regions)
+    n_right_true = len(right_regions)
+    n_left_pred = is_left_pred.sum()
+    n_right_pred = is_right_pred.sum()
 
-    stats_text += '\nPredicted:\n'
-    for cls in [0, 1, 2]:
-        if cls in pred_counts:
-            stats_text += f'  {class_names[cls]}: {pred_counts[cls]}\n'
+    ax_signal.set_title(
+        f'Read: {read_id} | True: L={n_left_true} R={n_right_true} | '
+        f'Pred segments: L={n_left_pred} R={n_right_pred}',
+        fontweight='bold', fontsize=11
+    )
 
-    fig.text(0.02, 0.98, stats_text, transform=fig.transFigure,
-             fontsize=10, verticalalignment='top', family='monospace',
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    # Legends
+    lines1, labels1 = ax_signal.get_legend_handles_labels()
+    lines2, labels2 = ax_pred.get_legend_handles_labels()
+    ax_signal.legend(lines1 + lines2, labels1 + labels2,
+                    loc='upper left', fontsize=8, ncol=2)
 
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"✅ Saved: {save_path}")
-    plt.close()
+    ax_signal.grid(True, alpha=0.3)
 
     return True
 
@@ -191,32 +193,41 @@ def find_interesting_reads(predictions_df):
 
     stats_df = pd.DataFrame(read_stats)
 
-    examples = {}
+    examples = []
 
     # Perfect prediction with a fork
     perfect_with_fork = stats_df[(stats_df['accuracy'] == 1.0) & (stats_df['has_left'] | stats_df['has_right'])]
     if len(perfect_with_fork) > 0:
-        # Prefer one with both forks
         both = perfect_with_fork[perfect_with_fork['has_left'] & perfect_with_fork['has_right']]
         if len(both) > 0:
-            examples['perfect'] = both.iloc[0]['read_id']
+            examples.append(both.iloc[0]['read_id'])
         else:
-            examples['perfect'] = perfect_with_fork.iloc[0]['read_id']
+            examples.append(perfect_with_fork.iloc[0]['read_id'])
 
     # Has both fork types
     both_forks = stats_df[stats_df['has_left'] & stats_df['has_right']]
     if len(both_forks) > 0:
-        # Get one with high but not perfect accuracy
         good_both = both_forks[(both_forks['accuracy'] > 0.9) & (both_forks['accuracy'] < 1.0)]
         if len(good_both) > 0:
-            examples['both_forks'] = good_both.iloc[0]['read_id']
+            examples.append(good_both.iloc[0]['read_id'])
         else:
-            examples['both_forks'] = both_forks.iloc[0]['read_id']
+            examples.append(both_forks.iloc[0]['read_id'])
 
     # One with some errors but still good
     some_errors = stats_df[(stats_df['n_errors'] >= 5) & (stats_df['n_errors'] <= 10) & (stats_df['accuracy'] > 0.85)]
     if len(some_errors) > 0:
-        examples['minor_errors'] = some_errors.iloc[0]['read_id']
+        examples.append(some_errors.iloc[0]['read_id'])
+
+    # Fallback: just get any reads with forks
+    while len(examples) < 3 and len(stats_df) > 0:
+        with_forks = stats_df[stats_df['has_left'] | stats_df['has_right']]
+        if len(with_forks) > 0:
+            # Get one not already in examples
+            for _, row in with_forks.iterrows():
+                if row['read_id'] not in examples:
+                    examples.append(row['read_id'])
+                    break
+        break
 
     return examples
 
@@ -231,7 +242,7 @@ def main():
                        help='Output directory for plots')
     parser.add_argument('--read-ids', type=str, nargs='*',
                        help='Specific read IDs to visualize (optional)')
-    parser.add_argument('--n-examples', type=int, default=3,
+    parser.add_argument('--n-examples', type=int, default=5,
                        help='Number of example reads to generate')
 
     args = parser.parse_args()
@@ -240,7 +251,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("\n" + "="*70)
-    print("GENERATING READ PREDICTION VISUALIZATIONS (NOTEBOOK STYLE)")
+    print("GENERATING FORK PREDICTION EXAMPLES (NOTEBOOK STYLE)")
     print("="*70)
 
     # Load predictions
@@ -254,25 +265,41 @@ def main():
         print(f"\n📊 Visualizing {len(read_ids)} specified reads...")
     else:
         print("\n📊 Finding interesting example reads...")
-        examples = find_interesting_reads(predictions_df)
-        read_ids = list(examples.values())[:args.n_examples]
+        read_ids = find_interesting_reads(predictions_df)
+        read_ids = read_ids[:args.n_examples]
         print(f"✅ Selected {len(read_ids)} example reads")
+
+    # Create figure with n_examples subplots
+    n_examples = len(read_ids)
+    fig, axes = plt.subplots(n_examples, 1, figsize=(16, 4*n_examples))
+
+    if n_examples == 1:
+        axes = [axes]
 
     # Generate visualizations
     print(f"\n🎨 Generating visualizations...\n")
     success_count = 0
-    for i, read_id in enumerate(read_ids, 1):
-        save_path = output_dir / f'prediction_example_{i}.png'
-        success = plot_read_comparison(
-            read_id, predictions_df, args.xy_base_dir, save_path
+    for idx, read_id in enumerate(read_ids):
+        success = plot_fork_prediction_single_read(
+            read_id, predictions_df, args.xy_base_dir, axes[idx]
         )
         if success:
             success_count += 1
 
+    plt.suptitle('Fork Predictions on Individual Reads',
+                fontsize=16, fontweight='bold')
+    plt.tight_layout()
+
+    # Save combined figure
+    output_path = output_dir / 'fork_prediction_examples.png'
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\n✅ Saved: {output_path}")
+    plt.close()
+
     print("\n" + "="*70)
-    print(f"✅ COMPLETE! Generated {success_count}/{len(read_ids)} visualizations")
+    print(f"✅ COMPLETE! Generated {success_count}/{n_examples} visualizations")
     print("="*70)
-    print(f"\n📁 Saved to: {output_dir}/")
+    print(f"\n📁 Saved to: {output_path}")
 
 
 if __name__ == '__main__':
