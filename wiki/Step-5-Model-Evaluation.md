@@ -213,6 +213,132 @@
 
 ---
 
+## 📈 Advanced Multi-Class Analysis
+
+### ROC Curves (One-vs-Rest)
+
+![ROC Curves](../results/case_study_jan2026/combined/advanced_evaluation/roc_curves_multiclass.png)
+
+**Key Metrics:**
+- **Background AUC: 0.9692** - Excellent separation from forks
+- **Left Fork AUC: 0.9893** - Outstanding discrimination
+- **Right Fork AUC: 0.9879** - Outstanding discrimination
+
+**Optimal Thresholds:**
+- Background: 0.509 (balanced sensitivity/specificity)
+- Left Fork: 0.332 (favors recall)
+- Right Fork: 0.408 (balanced)
+
+**Interpretation:**
+- All AUCs > 0.96 indicate excellent class separation
+- Fork classes achieve near-perfect AUC (>0.98)
+- Model confidently distinguishes all three classes
+
+### Precision-Recall Curves
+
+![PR Curves](../results/case_study_jan2026/combined/advanced_evaluation/pr_curves_multiclass.png)
+
+**Average Precision (AP) Scores:**
+- **Background AP: 0.9791** - Well above random (0.5782)
+- **Left Fork AP: 0.9514** - Excellent (random = 0.1791)
+- **Right Fork AP: 0.9598** - Excellent (random = 0.2427)
+
+**Best F1 Points:**
+- Background: 0.919 (high precision maintained)
+- Left Fork: 0.881 (precision-recall trade-off)
+- Right Fork: 0.897 (strong balance)
+
+**Interpretation:**
+- All classes far exceed random baseline
+- Fork classes 5.3× better than random classifier
+- Precision remains high across recall range
+
+### Calibration Analysis (Reliability Diagrams)
+
+![Calibration Curves](../results/case_study_jan2026/combined/advanced_evaluation/calibration_curves.png)
+
+**Brier Scores (lower is better, range 0-1):**
+- **Background: 0.0917** - Well calibrated
+- **Left Fork: 0.0416** - Excellently calibrated ✨
+- **Right Fork: 0.0503** - Excellently calibrated ✨
+
+**Calibration Quality:**
+- **Left & Right Forks**: Nearly perfect calibration (curves follow diagonal)
+  - When model says 70% confident → actually correct ~70% of time
+  - Critical for setting confidence thresholds
+- **Background**: Slight overconfidence at mid-range probabilities
+  - Model predicts 40-60% → actually ~30-40%
+  - Still acceptable (Brier < 0.1)
+
+**Practical Impact:**
+- **Fork predictions are trustworthy** - probabilities reflect true likelihood
+- Can set meaningful confidence thresholds (e.g., >0.8 for high-confidence calls)
+- Suitable for uncertainty quantification in downstream analysis
+
+### Confidence Distribution Analysis
+
+![Confidence Distributions](../results/case_study_jan2026/combined/advanced_evaluation/confidence_distributions.png)
+
+**Background Class:**
+- Correct predictions: Mean confidence = 0.616
+- Incorrect predictions: Mean confidence = 0.489
+- **Good separation** - model is more confident when correct
+
+**Left Fork Class:**
+- Correct predictions: Mean confidence = 0.157
+- Incorrect predictions: Mean confidence = 0.226
+- **Bimodal distribution** - clear high/low confidence groups
+
+**Right Fork Class:**
+- Correct predictions: Mean confidence = 0.227
+- Incorrect predictions: Mean confidence = 0.285
+- **Similar pattern** to left forks
+
+**Key Insights:**
+1. **Correct predictions cluster at higher confidences** (green peaks on right)
+2. **Incorrect predictions spread across range** (red spread)
+3. **Clear confidence separation** enables filtering low-quality predictions
+4. **Fork confidences lower** than background (due to class imbalance)
+
+### Threshold Analysis
+
+![Threshold Analysis](../results/case_study_jan2026/combined/advanced_evaluation/threshold_analysis.png)
+
+**Optimal Thresholds (maximize F1):**
+- **Background: 0.475** - F1 peaks at ~0.92
+- **Left Fork: 0.465** - F1 peaks at ~0.89
+- **Right Fork: 0.515** - F1 peaks at ~0.91
+
+**Trade-off Insights:**
+
+**Background:**
+- Precision high (>95%) at thresholds 0.4-0.8
+- Recall drops sharply above 0.6
+- **Recommended**: 0.45-0.50 for balanced performance
+
+**Left Fork:**
+- Precision vs recall cross at ~0.46
+- F1 relatively flat 0.3-0.6 (robust to threshold)
+- **Recommended**: 0.40-0.50 for high recall, 0.50-0.60 for high precision
+
+**Right Fork:**
+- Strong F1 maintenance across 0.4-0.6
+- Recall degrades gracefully above optimal
+- **Recommended**: 0.45-0.55 for production use
+
+**Practical Recommendations:**
+- **High-confidence mode** (precision focus): Thresholds > 0.60
+  - Use for building curated fork databases
+  - Expect ~10-20% fewer calls but >95% precision
+- **Sensitive mode** (recall focus): Thresholds 0.30-0.40
+  - Use for discovery/screening
+  - Capture more forks at cost of false positives
+- **Balanced mode** (default): Thresholds 0.45-0.50
+  - Current model default
+  - Optimal F1 performance
+
+---
+
 ## 🎯 Model Strengths
 
 ### Excellent Performance On:
