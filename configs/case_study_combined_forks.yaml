@@ -1,0 +1,120 @@
+# Configuration for Combined Fork Detection Model (Col0 + orc1b2)
+# Case Study: January 2026 Fork Analysis - UNIFIED APPROACH
+
+experiment_name: "case_study_jan2026_combined_forks"
+
+data:
+  # XY signal data from BOTH genotypes (all 4 runs combined)
+  base_dir: "data/case_study_jan2026/combined/xy_data"
+  run_dirs:
+    - "NM30_1strun"   # Col0 run 1
+    - "NM30_2ndrun"   # Col0 run 2
+    - "NM31_1strun"   # orc1b2 run 1
+    - "NM31_2ndrun"   # orc1b2 run 2
+
+  # Combined fork annotations (ALL forks from both genotypes)
+  left_forks_bed: "data/case_study_jan2026/combined/annotations/leftForks_combined.bed"
+  right_forks_bed: "data/case_study_jan2026/combined/annotations/rightForks_combined.bed"
+
+  # Optional: genomic regions for regional analysis
+  regions:
+    centromere: null  # Add path if available
+    pericentromere: null
+
+preprocessing:
+  # Hybrid balancing strategy
+  oversample_ratio: 0.5  # 50% oversample minority + 50% undersample majority
+
+  # Sequence padding
+  percentile: 100  # Use maximum length (or 95 for faster training)
+
+  # Signal encoding
+  use_enhanced_encoding: true  # 9-channel encoding
+  smooth_sigma: 2
+  local_window: 50
+
+model:
+  type: "fork_expert"  # Fork detection model (3-class)
+  n_classes: 3  # background, left fork, right fork
+  n_channels: 9  # Enhanced encoding
+
+  # Architecture hyperparameters
+  cnn_filters: 64
+  lstm_units: 128
+  dropout_rate: 0.3
+
+  # Multi-scale CNN dilation rates
+  dilation_rates: [1, 2, 4]
+
+training:
+  epochs: 150
+  batch_size: 32
+  learning_rate: 0.0005
+
+  # Loss function
+  loss:
+    type: "multi_class_focal"
+    alpha: [1.0, 2.0, 2.0]  # [background, left, right] - higher weight for minority classes
+    gamma: 2.0
+
+  # Callbacks
+  early_stopping_patience: 25
+  reduce_lr_patience: 10
+  reduce_lr_factor: 0.5
+
+  # Train/validation split
+  validation_split: 0.2
+  random_state: 42
+
+output:
+  # Model checkpoint
+  model_dir: "models/case_study_jan2026"
+  model_filename: "combined_fork_detector.keras"
+
+  # Results directory
+  results_dir: "results/case_study_jan2026/combined"
+
+  # Save intermediate files
+  save_training_data: true  # Save preprocessed data for inspection
+  save_history: true  # Save training history as JSON
+  save_plots: true  # Generate and save training plots
+
+# Notes
+notes: |
+  COMBINED Fork Detection Model (Col0 + orc1b2)
+
+  🎯 STRATEGY: Train on ALL data for maximum performance!
+
+  Dataset Statistics:
+  ==================
+  Left forks:  755 annotations (229 Col0 + 526 orc1b2)
+  Right forks: 865 annotations (217 Col0 + 648 orc1b2)
+  TOTAL:       1,620 fork annotations across BOTH genotypes
+
+  Advantages of Combined Approach:
+  =================================
+  ✅ 3.6× more training data than Col0 alone
+  ✅ 1.4× more data than orc1b2 alone
+  ✅ Better generalization across genotypes
+  ✅ More robust to biological variation
+  ✅ Single unified model for all fork detection
+  ✅ Can still analyze genotype-specific patterns during evaluation
+
+  Training Characteristics:
+  ========================
+  - Uses data from BOTH Col0 (NM30) and orc1b2 (NM31)
+  - All 4 XY data runs combined
+  - 9-channel enhanced encoding for rich features
+  - Hybrid balancing at read level
+  - Multi-class focal loss for segment-level imbalance
+  - Expected training time: ~60-120 minutes (CPU mode)
+  - Expected sequences after balancing: ~3000-4000 reads
+
+  Post-Training Analysis:
+  ======================
+  After training, we can:
+  1. Evaluate overall performance
+  2. Analyze predictions separately for Col0 vs orc1b2 reads
+  3. Compare fork patterns between genotypes
+  4. Identify genotype-specific fork characteristics
+  5. Generate comparative visualizations
