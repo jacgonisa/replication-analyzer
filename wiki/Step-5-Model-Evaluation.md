@@ -48,7 +48,7 @@
 
 ## 🎨 Comprehensive Evaluation Visualization
 
-![Comprehensive Evaluation](../results/case_study_jan2026/combined/evaluation/plots/comprehensive_evaluation.png)
+![Comprehensive Evaluation](images/evaluation/comprehensive_evaluation.png)
 
 **Plot includes:**
 1. **Confusion Matrix** - Classification breakdown
@@ -217,7 +217,7 @@
 
 ### ROC Curves (One-vs-Rest)
 
-![ROC Curves](../results/case_study_jan2026/combined/advanced_evaluation/roc_curves_multiclass.png)
+![ROC Curves](images/evaluation/roc_curves_multiclass.png)
 
 **Key Metrics:**
 - **Background AUC: 0.9692** - Excellent separation from forks
@@ -236,7 +236,7 @@
 
 ### Precision-Recall Curves
 
-![PR Curves](../results/case_study_jan2026/combined/advanced_evaluation/pr_curves_multiclass.png)
+![PR Curves](images/evaluation/pr_curves_multiclass.png)
 
 **Average Precision (AP) Scores:**
 - **Background AP: 0.9791** - Well above random (0.5782)
@@ -255,7 +255,7 @@
 
 ### Calibration Analysis (Reliability Diagrams)
 
-![Calibration Curves](../results/case_study_jan2026/combined/advanced_evaluation/calibration_curves.png)
+![Calibration Curves](images/evaluation/calibration_curves.png)
 
 **Brier Scores (lower is better, range 0-1):**
 - **Background: 0.0917** - Well calibrated
@@ -277,7 +277,7 @@
 
 ### Confidence Distribution Analysis
 
-![Confidence Distributions](../results/case_study_jan2026/combined/advanced_evaluation/confidence_distributions.png)
+![Confidence Distributions](images/evaluation/confidence_distributions.png)
 
 **Background Class:**
 - Correct predictions: Mean confidence = 0.616
@@ -302,7 +302,7 @@
 
 ### Threshold Analysis
 
-![Threshold Analysis](../results/case_study_jan2026/combined/advanced_evaluation/threshold_analysis.png)
+![Threshold Analysis](images/evaluation/threshold_analysis.png)
 
 **Optimal Thresholds (maximize F1):**
 - **Background: 0.475** - F1 peaks at ~0.92
