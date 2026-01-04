@@ -51,34 +51,50 @@
 
 ## 📊 Visualizations Available
 
-### Training & Evaluation Plots
+### Comprehensive Notebook-Style Plots ⭐
 
-1. **[Training History](images/evaluation/training_history.png)**
+**NEW: Complete multi-panel visualizations matching notebook style**
+
+1. **[Training History - Comprehensive](images/comprehensive/fork_detector_combined_training_history.png)**
+   - **6-panel visualization**: Loss, F1-Macro, Accuracy, Categorical Acc, Log Loss, Summary
+   - Shows complete training dynamics over 60 epochs
+   - Highlights best epoch (35) with detailed metrics
+   - See detailed explanation in [Step 4](Step-4-Training-Results.md#-training-visualization)
+
+2. **[Evaluation - Comprehensive](images/comprehensive/fork_detector_combined_evaluation.png)**
+   - **8-panel visualization**: Confusion matrices (counts & %), per-class metrics, class distribution, probability distributions, error analysis
+   - Complete performance breakdown in single view
+   - Includes detailed metrics summary with error type breakdown
+   - See detailed explanation in [Step 5](Step-5-Model-Evaluation.md#-comprehensive-visualization-summary)
+
+### Individual Analysis Plots
+
+3. **[Training History - Standard](images/evaluation/training_history.png)**
    - Loss, accuracy, F1-score curves over 60 epochs
    - Shows convergence to epoch 35
 
-2. **[Comprehensive Evaluation](images/evaluation/comprehensive_evaluation.png)**
+4. **[Comprehensive Evaluation - Standard](images/evaluation/comprehensive_evaluation.png)**
    - Confusion matrix
    - Overall metrics bar chart
    - Class distribution
 
-3. **[ROC Curves (Multi-class)](images/evaluation/roc_curves_multiclass.png)**
+5. **[ROC Curves (Multi-class)](images/evaluation/roc_curves_multiclass.png)**
    - One-vs-rest for each class
    - Shows excellent discrimination (AUC > 0.96)
 
-4. **[Precision-Recall Curves](images/evaluation/pr_curves_multiclass.png)**
+6. **[Precision-Recall Curves](images/evaluation/pr_curves_multiclass.png)**
    - Average Precision scores
    - Fork classes 5.3× better than random
 
-5. **[Calibration Curves](images/evaluation/calibration_curves.png)**
+7. **[Calibration Curves](images/evaluation/calibration_curves.png)**
    - Reliability diagrams
    - Fork predictions near-perfectly calibrated
 
-6. **[Confidence Distributions](images/evaluation/confidence_distributions.png)**
+8. **[Confidence Distributions](images/evaluation/confidence_distributions.png)**
    - Correct vs incorrect predictions
    - Shows confidence separation
 
-7. **[Threshold Analysis](images/evaluation/threshold_analysis.png)**
+9. **[Threshold Analysis](images/evaluation/threshold_analysis.png)**
    - Precision/recall trade-offs
    - Optimal thresholds: 0.475, 0.465, 0.515
 
@@ -228,7 +244,11 @@ The model is **production-ready** for:
 - `scripts/train_fork_model.py` - Train fork detection model
 - `scripts/evaluate_model.py` - Comprehensive evaluation
 - `scripts/advanced_evaluation.py` - Multi-class advanced metrics
-- `scripts/visualize_read_predictions.py` - Generate example plots
+- `scripts/generate_comprehensive_plots.py` - **NEW**: Generate notebook-style comprehensive plots
+- `scripts/visualize_read_predictions.py` - Generate example read prediction plots
+
+### Visualization Modules
+- `replication_analyzer/visualization/comprehensive_plots.py` - **NEW**: Comprehensive plotting functions (training history, evaluation)
 
 ### Configuration
 - `configs/case_study_combined_forks.yaml` - Complete training configuration

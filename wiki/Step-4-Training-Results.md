@@ -196,17 +196,35 @@ data/preprocessed/
 
 ## 🎨 Training Visualization
 
-Training curves plot saved at:
+### Comprehensive Training History
+
+![Training History Comprehensive](images/comprehensive/fork_detector_combined_training_history.png)
+
+**Six-panel comprehensive training visualization:**
+
+1. **Loss** - Training vs validation loss convergence (final: 0.0125 train, 0.0142 val)
+2. **Macro F1-Score** - Primary performance metric (peaked at epoch 35: 84.53% val)
+3. **Accuracy** - Overall classification accuracy (98.25% val)
+4. **Categorical Accuracy** - Per-batch accuracy tracking
+5. **Loss (Log Scale)** - Loss convergence in log space
+6. **Training Summary** - Complete metrics summary:
+   - Best Epoch: 35
+   - Validation Metrics: Acc 98.25%, F1 84.53%
+   - Training Metrics: Loss 0.0125, Val Loss 0.0142
+   - Total Training Time: ~13 min
+   - Final Val Test: 0.0105
+
+**Key observations from visualization:**
+- Training and validation curves closely aligned → minimal overfitting
+- Loss stabilized after ~15 epochs
+- F1-Macro shows steady improvement
+- Best epoch (35) captured before any degradation
+- Log-scale loss shows smooth convergence
+
+**Standard training curves also saved at:**
 ```
 results/case_study_jan2026/combined/plots/training_history.png
 ```
-
-**Plot includes:**
-- Loss curves (training vs validation)
-- F1-Macro curves (training vs validation)
-- Accuracy curves (training vs validation)
-- Learning rate schedule
-- Best epoch marker
 
 ---
 

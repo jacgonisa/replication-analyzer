@@ -6,6 +6,57 @@
 
 ---
 
+## 📊 Comprehensive Visualization Summary
+
+### Training History - Complete Overview
+
+![Training History Comprehensive](images/comprehensive/fork_detector_combined_training_history.png)
+
+**Six-panel comprehensive training visualization:**
+
+1. **Loss** - Training vs validation loss convergence
+2. **Macro F1-Score** - Primary performance metric (peaked at epoch 35: 84.53%)
+3. **Accuracy** - Overall classification accuracy
+4. **Categorical Accuracy** - Per-batch accuracy tracking
+5. **Loss (Log Scale)** - Loss convergence in log space
+6. **Training Summary** - Key metrics at best epoch
+
+**Key observations:**
+- Model converged well with no overfitting
+- Best validation F1-Macro: 84.53% at epoch 35
+- Training and validation curves closely aligned
+- Loss stabilized after ~15 epochs
+
+### Evaluation Metrics - Complete Overview
+
+![Evaluation Comprehensive](images/comprehensive/fork_detector_combined_evaluation.png)
+
+**Eight-panel comprehensive evaluation visualization:**
+
+**Top Row:**
+1. **Confusion Matrix** - Classification breakdown (counts)
+2. **Per-Class Metrics** - Precision, Recall, F1 for each class
+3. **Class Distribution** - True vs Predicted counts
+4. **Normalized Confusion Matrix** - Percentages
+
+**Bottom Row:**
+5. **Probability Distributions** - Confidence by true class
+6. **Mean Predicted Probabilities** - Heatmap of prediction confidence
+7. **Error Types** - Breakdown of misclassification patterns
+8. **Detailed Metrics Summary** - Complete statistics including:
+   - Confusion matrix values
+   - Per-class precision/recall/F1
+   - Overall metrics (Kappa, MCC)
+   - Error analysis
+
+**Key highlights:**
+- Excellent fork directionality: Only 24 left↔right errors
+- 99.9% accuracy distinguishing fork directions
+- Most errors at fork boundaries (expected)
+- Well-calibrated probability predictions
+
+---
+
 ## 🎯 Evaluation Overview
 
 **Evaluation completed**: January 4, 2026 at 16:50 UTC
