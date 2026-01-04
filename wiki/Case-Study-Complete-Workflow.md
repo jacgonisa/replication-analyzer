@@ -5,7 +5,7 @@
 **Date**: January 4, 2026
 **Dataset**: Combined Col0 + orc1b2 fork annotations (1,622 forks)
 **Objective**: Train unified fork detection model
-**Status**: ✅ Preprocessing Complete | 🔄 Training In Progress
+**Status**: ✅ Complete - Model Trained & Evaluated
 
 ---
 
@@ -512,9 +512,9 @@ replication-analyzer/
 | **Config** | 30 min | ✅ Complete |
 | **Preprocess Dev** | 120 min | ✅ Complete |
 | **Preprocessing** | 6 min | ✅ Complete |
-| **Training** | 45-90 min | 🔄 In Progress |
-| **Evaluation** | 10 min | ⏳ Pending |
-| **TOTAL** | **~3.5-4 hours** | **76% complete** |
+| **Training** | 13 min | ✅ Complete |
+| **Evaluation** | 3 min | ✅ Complete |
+| **TOTAL** | **~3 hours** | **100% complete** ✅ |
 
 **Time saved by preprocessing checkpoint**: 82.5 minutes!
 
@@ -522,19 +522,35 @@ replication-analyzer/
 
 ## 📊 Next Steps
 
-1. ⏳ **Wait for training to complete** (~30-60 min remaining)
-2. ✅ **Evaluate model performance**
-   - Overall metrics (F1, Precision, Recall)
-   - Per-genotype analysis (Col0 vs orc1b2)
-   - Regional patterns (if regions available)
-3. ✅ **Generate visualizations**
-   - Training curves
-   - Confusion matrices
-   - Example predictions
-4. ✅ **Update wiki with results**
-   - Final metrics
-   - Model insights
-   - Recommendations
+### ✅ Completed Steps
+
+1. ✅ **Training Complete**
+   - Best epoch: 35 (of 60)
+   - Validation F1-Macro: 84.53%
+   - Validation Accuracy: 98.25%
+   - Model: `models/case_study_jan2026/combined_fork_detector.keras` (15 MB)
+   - [[Training Results →]](Step-4-Training-Results.md)
+
+2. ✅ **Evaluation Complete**
+   - Overall Accuracy: 90.56%
+   - **F1-Macro: 89.77%**
+   - **Fork Directionality: 99.9% accuracy** ⭐
+   - Per-class F1: Background (91.79%), Left Fork (87.76%), Right Fork (89.74%)
+   - [[Evaluation Results →]](Step-5-Model-Evaluation.md)
+
+3. ✅ **Visualizations Generated**
+   - Training history curves
+   - Confusion matrix
+   - Comprehensive evaluation plot
+   - All saved in `results/case_study_jan2026/combined/`
+
+### 🚀 Ready for Production
+
+The model is now ready to:
+- Annotate new fork data automatically
+- Process 10,000s of reads (3000× faster than manual)
+- Provide high-confidence fork annotations (99.9% directional accuracy)
+- Support genome-wide replication studies
 
 ---
 
