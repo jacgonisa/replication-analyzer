@@ -231,12 +231,14 @@ def load_trained_fork_model(model_path, custom_objects=None):
         Loaded model
     """
     if custom_objects is None:
+        from replication_analyzer.models.base import SelfAttention
         custom_objects = {
             'MultiClassFocalLoss': MultiClassFocalLoss,
-            'MultiClassF1Score': MultiClassF1Score
+            'MultiClassF1Score': MultiClassF1Score,
+            'SelfAttention': SelfAttention
         }
 
-    model = tf.keras.models.load_model(model_path, custom_objects=custom_objects)
+    model = tf.keras.models.load_model(model_path, custom_objects=custom_objects, safe_mode=False)
     print(f"✅ Model loaded from: {model_path}")
 
     return model

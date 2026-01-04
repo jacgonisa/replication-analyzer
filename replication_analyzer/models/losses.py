@@ -69,7 +69,7 @@ class MultiClassFocalLoss(tf.keras.losses.Loss):
     Extends Focal Loss to handle multiple classes with per-class weighting.
     """
 
-    def __init__(self, alpha: list = None, gamma: float = 2.0, name: str = 'multi_class_focal_loss'):
+    def __init__(self, alpha: list = None, gamma: float = 2.0, name: str = 'multi_class_focal_loss', **kwargs):
         """
         Parameters
         ----------
@@ -80,8 +80,10 @@ class MultiClassFocalLoss(tf.keras.losses.Loss):
             Focusing parameter
         name : str
             Name of the loss
+        **kwargs
+            Additional arguments for parent class
         """
-        super().__init__(name=name)
+        super().__init__(name=name, **kwargs)
         self.alpha = alpha if alpha is not None else [1.0, 1.0, 1.0]
         self.gamma = gamma
         self.n_classes = len(self.alpha)
