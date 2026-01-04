@@ -1,0 +1,95 @@
+# Configuration for Col0 Fork Detection Model
+# Case Study: January 2026 Fork Analysis
+
+experiment_name: "case_study_jan2026_col0_forks"
+
+data:
+  # XY signal data (will combine both runs)
+  base_dir: "data/case_study_jan2026/Col0/xy_data"
+  run_dirs:
+    - "1strun"
+    - "2ndrun"
+
+  # Fork annotations
+  left_forks_bed: "data/case_study_jan2026/Col0/annotations/leftForks_DNAscent_Col0.bed"
+  right_forks_bed: "data/case_study_jan2026/Col0/annotations/rightForks_DNAscent_Col0.bed"
+
+  # Optional: genomic regions for regional analysis
+  regions:
+    centromere: null  # Add path if available
+    pericentromere: null
+
+preprocessing:
+  # Hybrid balancing strategy
+  oversample_ratio: 0.5  # 50% oversample minority + 50% undersample majority
+
+  # Sequence padding
+  percentile: 100  # Use maximum length (or 95 for faster training)
+
+  # Signal encoding
+  use_enhanced_encoding: true  # 9-channel encoding
+  smooth_sigma: 2
+  local_window: 50
+
+model:
+  type: "fork_expert"  # Fork detection model (3-class)
+  n_classes: 3  # background, left fork, right fork
+  n_channels: 9  # Enhanced encoding
+
+  # Architecture hyperparameters
+  cnn_filters: 64
+  lstm_units: 128
+  dropout_rate: 0.3
+
+  # Multi-scale CNN dilation rates
+  dilation_rates: [1, 2, 4]
+
+training:
+  epochs: 150
+  batch_size: 32
+  learning_rate: 0.0005
+
+  # Loss function
+  loss:
+    type: "multi_class_focal"
+    alpha: [1.0, 2.0, 2.0]  # [background, left, right] - higher weight for minority classes
+    gamma: 2.0
+
+  # Callbacks
+  early_stopping_patience: 25
+  reduce_lr_patience: 10
+  reduce_lr_factor: 0.5
+
+  # Train/validation split
+  validation_split: 0.2
+  random_state: 42
+
+output:
+  # Model checkpoint
+  model_path: "models/case_study_jan2026/col0_fork_detector.keras"
+
+  # Results directory
+  results_dir: "results/case_study_jan2026/col0"
+
+  # Save intermediate files
+  save_training_data: true  # Save preprocessed data for inspection
+  save_history: true  # Save training history as JSON
+  save_plots: true  # Generate and save training plots
+
+# Notes
+notes: |
+  Col0 (Wild-Type) Fork Detection Model
+
+  Dataset Statistics:
+  - Left forks: 229 annotations
+  - Right forks: 217 annotations
+  - Total: 446 fork annotations
+  - Some reads have multiple forks (biological reality)
+
+  Training Strategy:
+  - 9-channel enhanced encoding for robust feature extraction
+  - Hybrid balancing to handle class imbalance
+  - Multi-class focal loss (emphasis on minority fork classes)
+  - Early stopping to prevent overfitting
+
+  Expected Training Time: ~30-60 minutes (CPU mode)
