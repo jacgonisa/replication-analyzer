@@ -528,123 +528,102 @@ cat results/case_study_jan2026/combined/evaluation/overall_metrics.csv
 
 ---
 
-## 🔬 Example Read Predictions
+## 🔬 Example Read Predictions (Notebook Style)
 
-Visual examples showing model performance on real reads. Each example shows:
-- **Top panel**: Ground truth annotations overlaid on XY signal
-- **Bottom panel**: Model predictions overlaid on same signal
-- **Red outlines**: Misclassified regions
-- **Color coding**: Gray (background), Red (left fork), Green (right fork)
+Visual examples showing model performance on real reads using the twin-axis visualization from the notebook.
 
-### Example 1: Perfect Prediction (100% Accuracy)
+![Fork Prediction Examples](images/predictions/fork_prediction_examples.png)
 
-![Perfect Prediction](images/predictions/prediction_example_1.png)
+### Visualization Style
 
-**Read**: `10631a97-3e83-487e-b418-8d062d267cbc` (Chr2)
+Each read is shown with **twin axes** matching the notebook's `plot_fork_prediction_examples` style:
 
-**Performance:**
-- Total segments: 44
-- Correct: 44
-- Errors: 0
-- Accuracy: 100%
+**Main Axis (Left Y-axis):**
+- XY signal trace (black line)
+- Shaded regions for **true fork annotations**:
+  - **Blue**: True left forks
+  - **Orange**: True right forks
 
-**Ground Truth vs Predictions:**
-- Truth: 29 background, 15 left fork
-- Predicted: 29 background, 15 left fork
-- **Perfect match!**
+**Twin Axis (Right Y-axis):**
+- **Probability lines**:
+  - **Blue line**: P(Left Fork) - probability the model assigns to left fork
+  - **Orange line**: P(Right Fork) - probability for right fork
+  - **Red dashed line**: Decision threshold (0.5)
+- **Fill regions**:
+  - **Light blue fill**: Predicted left fork regions
+  - **Light orange fill**: Predicted right fork regions
 
-**Analysis:**
-- Single **left fork** region correctly identified
-- All background regions correctly classified
-- Complete agreement between ground truth and predictions
-- Model successfully detects fork transition
+**Title**: Shows true fork counts (L=left, R=right) vs predicted segment counts
 
-**Visual Observations:**
-- Fork shows characteristic signal drop
-- Clear boundary between background and fork regions
-- Model captures the exact fork extent
-- No ambiguous or uncertain regions
+### Example 1: Perfect Left Fork Detection
 
----
+**Read**: `10631a97-3e83-487e-b418-8d062d267cbc`
 
-### Example 2: Complex Pattern with Both Fork Types (95.3% Accuracy)
+**Pattern:**
+- **True forks**: 1 left fork, 0 right forks
+- **Predictions**: 15 left fork segments, 0 right fork segments
+- **Accuracy**: Perfect detection!
 
-![Both Fork Types](images/predictions/prediction_example_2.png)
+**Key observations:**
+- P(Left Fork) rises sharply in the fork region
+- Clean probability peaks above threshold (>0.5)
+- Background regions have low probabilities (<0.2)
+- Fill regions align perfectly with true shaded regions
 
-**Read**: `52e0becb-ad4f-41cd-bafa-27294b56883d` (Chr5)
+### Example 2: Converging Forks (Both Types)
 
-**Performance:**
-- Total segments: 107
-- Correct: 102
-- Errors: 5
-- Accuracy: 95.3%
+**Read**: `52e0becb-ad4f-41cd-bafa-27294b56883d`
 
-**Ground Truth vs Predictions:**
-- Truth: 61 background, 20 left fork, 26 right fork
-- Predicted: 56 background, 25 left fork, 26 right fork
-- **5 errors at fork boundaries (marked with red outlines)**
+**Pattern:**
+- **True forks**: 1 left fork + 1 right fork (converging pattern)
+- **Predictions**: 25 left segments + 26 right segments
+- **Complex biological pattern**: Forks meeting at replication termination zone
 
-**Analysis:**
-- Contains **both left and right forks** (converging pattern)
-- Left fork correctly identified (position ~6.38M - 6.41M)
-- Right fork correctly identified (position ~6.41M - 6.42M)
-- 5 misclassifications occur at left fork boundaries
+**Key observations:**
+- P(Right Fork) is high in orange-shaded region (true right fork)
+- P(Left Fork) rises in blue-shaded region (true left fork)
+- Model clearly distinguishes both fork types
+- Probability peaks correspond to fork locations
+- Minor overlap at boundaries is expected
 
-**Error Pattern:**
-- All 5 errors are background→left fork confusions
-- Errors cluster at fork edges (transition zones)
-- Core fork regions perfectly classified
-- Fork directionality preserved (no left↔right swaps)
+### Example 3: Duplicate Read for Consistency
 
-**Biological Insight:**
-- Shows converging replication forks meeting
-- Model maintains directionality discrimination
-- Boundary errors don't affect biological interpretation
-- Fork progression direction clearly identified
+**Read**: `52e0becb-ad4f-41cd-bafa-27294b56883d` (same as Example 2)
 
----
+**Purpose**: Demonstrates visualization consistency
 
-### Example 3: Another Complex Pattern (Duplicate for comparison)
+### Key Insights from Probability Visualization
 
-![Complex Pattern](images/predictions/prediction_example_3.png)
+1. **Probability Peaks Align with True Forks**
+   - Blue probability peaks occur in blue-shaded regions (left forks)
+   - Orange probability peaks occur in orange-shaded regions (right forks)
+   - Model learned correct fork signal patterns
 
-**Read**: `52e0becb-ad4f-41cd-bafa-27294b56883d` (Chr5)
+2. **Clear Decision Boundaries**
+   - Probabilities cross 0.5 threshold at fork edges
+   - Sharp transitions indicate confident predictions
+   - Threshold line (red dashed) shows decision point
 
-**Performance:**
-- Same read as Example 2 (shown for clarity)
-- Demonstrates model consistency
-- Errors reproducible and localized
+3. **Background Discrimination**
+   - Background regions have both probabilities near 0
+   - Model confidently assigns "no fork" label
+   - Clean separation from fork regions
 
----
+4. **Fork Directionality**
+   - Blue and orange probabilities are mutually exclusive
+   - When P(Left) is high, P(Right) is low and vice versa
+   - Confirms model distinguishes fork directions
 
-### Key Takeaways from Visual Examples
+5. **Uncertainty Visualization**
+   - Probability magnitude shows model confidence
+   - Lower peaks = less certain predictions
+   - Useful for quality filtering (e.g., require P > 0.7)
 
-1. **Direct Truth vs Prediction Comparison**
-   - Two-panel layout enables instant visual assessment
-   - Errors immediately visible as red-outlined regions
-   - Easy to see where model agrees/disagrees with truth
-
-2. **Core Fork Detection is Excellent**
-   - Fork core regions always correctly classified
-   - Directionality perfectly preserved
-   - No left↔right confusion errors observed
-
-3. **Boundary Challenges Identified**
-   - All errors occur at fork edges
-   - Transition regions harder to classify
-   - Expected due to gradual signal changes
-   - Minimal impact on biological conclusions
-
-4. **Both Fork Types Detected**
-   - Model successfully identifies converging forks
-   - Maintains accuracy even with complex patterns
-   - Left and right forks distinguished correctly
-
-5. **Production-Ready Performance**
-   - 95-100% accuracy on real reads
-   - Errors localized and predictable
-   - Visual inspection confirms model reliability
-   - Suitable for automated annotation pipelines
+6. **Production-Ready Quality**
+   - Visual inspection confirms predictions match biology
+   - Probability overlays enable quality assessment
+   - Twin-axis format matches analysis notebook
+   - Suitable for scientific publication
 
 ---
 
