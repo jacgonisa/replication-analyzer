@@ -169,7 +169,7 @@ def plot_fork_prediction_single_read(read_id, predictions_df, xy_base_dir, ax):
     return True
 
 
-def find_interesting_reads(predictions_df):
+def find_interesting_reads(predictions_df, n_examples=5):
     """Find example reads showing different patterns."""
     read_stats = []
     for read_id in predictions_df['read_id'].unique():
@@ -195,7 +195,7 @@ def find_interesting_reads(predictions_df):
 
     examples = []
 
-    # Perfect prediction with a fork
+    # 1. Perfect prediction with a fork
     perfect_with_fork = stats_df[(stats_df['accuracy'] == 1.0) & (stats_df['has_left'] | stats_df['has_right'])]
     if len(perfect_with_fork) > 0:
         both = perfect_with_fork[perfect_with_fork['has_left'] & perfect_with_fork['has_right']]
@@ -204,7 +204,7 @@ def find_interesting_reads(predictions_df):
         else:
             examples.append(perfect_with_fork.iloc[0]['read_id'])
 
-    # Has both fork types
+    # 2. Has both fork types with high accuracy
     both_forks = stats_df[stats_df['has_left'] & stats_df['has_right']]
     if len(both_forks) > 0:
         good_both = both_forks[(both_forks['accuracy'] > 0.9) & (both_forks['accuracy'] < 1.0)]
@@ -213,20 +213,41 @@ def find_interesting_reads(predictions_df):
         else:
             examples.append(both_forks.iloc[0]['read_id'])
 
-    # One with some errors but still good
-    some_errors = stats_df[(stats_df['n_errors'] >= 5) & (stats_df['n_errors'] <= 10) & (stats_df['accuracy'] > 0.85)]
-    if len(some_errors) > 0:
-        examples.append(some_errors.iloc[0]['read_id'])
+    # 3. Left fork only with good accuracy
+    left_only = stats_df[(stats_df['has_left']) & (~stats_df['has_right']) & (stats_df['accuracy'] > 0.9)]
+    if len(left_only) > 0 and len(examples) < n_examples:
+        # Find one not already in examples
+        for _, row in left_only.iterrows():
+            if row['read_id'] not in examples:
+                examples.append(row['read_id'])
+                break
 
-    # Fallback: just get any reads with forks
-    while len(examples) < 3 and len(stats_df) > 0:
-        with_forks = stats_df[stats_df['has_left'] | stats_df['has_right']]
+    # 4. Right fork only with good accuracy
+    right_only = stats_df[(stats_df['has_right']) & (~stats_df['has_left']) & (stats_df['accuracy'] > 0.9)]
+    if len(right_only) > 0 and len(examples) < n_examples:
+        # Find one not already in examples
+        for _, row in right_only.iterrows():
+            if row['read_id'] not in examples:
+                examples.append(row['read_id'])
+                break
+
+    # 5. One with some errors but still good
+    some_errors = stats_df[(stats_df['n_errors'] >= 5) & (stats_df['n_errors'] <= 15) & (stats_df['accuracy'] > 0.85)]
+    if len(some_errors) > 0 and len(examples) < n_examples:
+        for _, row in some_errors.iterrows():
+            if row['read_id'] not in examples:
+                examples.append(row['read_id'])
+                break
+
+    # Fallback: fill with any reads that have forks
+    while len(examples) < n_examples:
+        with_forks = stats_df[(stats_df['has_left'] | stats_df['has_right']) & (stats_df['accuracy'] > 0.85)]
         if len(with_forks) > 0:
-            # Get one not already in examples
             for _, row in with_forks.iterrows():
                 if row['read_id'] not in examples:
                     examples.append(row['read_id'])
-                    break
+                    if len(examples) >= n_examples:
+                        break
         break
 
     return examples
@@ -265,8 +286,7 @@ def main():
         print(f"\n📊 Visualizing {len(read_ids)} specified reads...")
     else:
         print("\n📊 Finding interesting example reads...")
-        read_ids = find_interesting_reads(predictions_df)
-        read_ids = read_ids[:args.n_examples]
+        read_ids = find_interesting_reads(predictions_df, n_examples=args.n_examples)
         print(f"✅ Selected {len(read_ids)} example reads")
 
     # Create figure with n_examples subplots
