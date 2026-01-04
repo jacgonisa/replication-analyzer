@@ -98,13 +98,17 @@
    - Precision/recall trade-offs
    - Optimal thresholds: 0.475, 0.465, 0.515
 
-### Example Read Predictions
+### Example Read Predictions (Notebook Style) ⭐
 
-Visual examples showing model performance on real data:
+**NEW: Twin-axis probability visualization matching notebook style**
 
-1. **[Perfect Prediction](images/predictions/read_example_1_10631a97-3e83-48.png)** - 100% accuracy, left fork
-2. **[Both Fork Types](images/predictions/read_example_2_ce34193d-c3ea-4f.png)** - 97.8% accuracy, converging forks
-3. **[Minor Errors](images/predictions/read_example_3_52e0becb-ad4f-41.png)** - 95.3% accuracy, right fork
+![Fork Prediction Examples](images/predictions/fork_prediction_examples.png)
+
+Visual examples showing model performance on real reads with:
+- **Main axis**: XY signal + shaded true fork regions (blue=left, orange=right)
+- **Twin axis**: Probability lines (P(Left Fork), P(Right Fork)) + predicted regions
+- **Red threshold**: Decision boundary at 0.5
+- See detailed analysis in [Step 5: Example Predictions](Step-5-Model-Evaluation.md#-example-read-predictions-notebook-style)
 
 ---
 
