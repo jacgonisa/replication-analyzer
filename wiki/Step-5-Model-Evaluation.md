@@ -477,6 +477,118 @@ cat results/case_study_jan2026/combined/evaluation/overall_metrics.csv
 
 ---
 
+## 🔬 Example Read Predictions
+
+Visual examples showing how the model performs on real reads with ground truth annotations.
+
+### Example 1: Perfect Prediction (100% Accuracy)
+
+![Perfect Prediction](images/predictions/read_example_1_10631a97-3e83-48.png)
+
+**Read**: `10631a97-3e83-487e-b418-8d062d267cbc` (Chr2)
+
+**Performance:**
+- Total segments: 44
+- Errors: 0
+- Accuracy: 100%
+
+**Analysis:**
+- Single **left fork** correctly identified
+- All background regions correctly classified
+- High confidence predictions (>0.8) throughout
+- Perfect match between ground truth and predictions
+
+**Key Features:**
+- Fork shows characteristic signal spike
+- Model confidently assigns class probabilities
+- No ambiguous or low-confidence regions
+
+---
+
+### Example 2: Both Fork Types (97.8% Accuracy)
+
+![Both Forks](images/predictions/read_example_2_ce34193d-c3ea-4f.png)
+
+**Read**: `ce34193d-c3ea-4f5d-af9b-d6b2af59ff6f` (Chr4)
+
+**Performance:**
+- Total segments: 139
+- Errors: 3 (marked with red circles)
+- Accuracy: 97.8%
+
+**Analysis:**
+- Contains both **left fork** (red) and **right fork** (green)
+- Model correctly identifies both fork types
+- Only 3 misclassifications (all near fork boundaries)
+- Demonstrates excellent directionality discrimination
+
+**Error Analysis:**
+- Errors occur at fork edges (transition regions)
+- Confidence remains high for core fork regions
+- Boundary errors expected due to signal transitions
+
+**Biological Insight:**
+- Shows converging replication forks
+- Left and right forks meet near position 5.5e6
+- Model maintains >90% accuracy despite complex pattern
+
+---
+
+### Example 3: Minor Errors (95.3% Accuracy)
+
+![Minor Errors](images/predictions/read_example_3_52e0becb-ad4f-41.png)
+
+**Read**: `52e0becb-ad4f-41cd-bafa-27294b56883d` (Chr5)
+
+**Performance:**
+- Total segments: 107
+- Errors: 5 (marked with red circles)
+- Accuracy: 95.3%
+
+**Analysis:**
+- Single **right fork** with some misclassifications
+- Most errors occur at fork boundaries
+- Core fork region correctly identified
+- Confidence scores show uncertainty at error points
+
+**Error Pattern:**
+- 5 errors clustered near fork edges
+- Lower confidence (0.4-0.6) at error positions
+- Core fork predictions have high confidence (>0.7)
+- Suggests boundary detection challenges
+
+**Model Behavior:**
+- Correctly identifies fork directionality (right)
+- Background regions mostly correct
+- Errors don't affect biological interpretation
+- Filtering by confidence (>0.6) would remove most errors
+
+---
+
+### Key Takeaways from Examples
+
+1. **Core Fork Detection is Robust**
+   - High confidence (>0.7) in fork core regions
+   - Errors concentrated at boundaries
+   - Fork directionality almost always correct
+
+2. **Boundary Challenges**
+   - Transition regions harder to classify
+   - Expected due to gradual signal changes
+   - Minimal impact on biological interpretation
+
+3. **Confidence Reflects Accuracy**
+   - High confidence → high accuracy
+   - Low confidence → potential errors
+   - Can filter predictions by confidence threshold
+
+4. **Complex Patterns Handled Well**
+   - Example 2 shows converging forks (both types)
+   - Model maintains 97.8% accuracy
+   - Directionality preserved
+
+---
+
 ## 🚀 Next Steps
 
 ### 1. Annotate New Data
