@@ -23,6 +23,8 @@ def main():
     parser = argparse.ArgumentParser(description='Train Fork detection model (3-class)')
     parser.add_argument('--config', type=str, required=True,
                        help='Path to configuration YAML file')
+    parser.add_argument('--preprocessed', type=str, default=None,
+                       help='Path to preprocessed data (.npz file) - FAST TRAINING!')
     parser.add_argument('--plot', action='store_true',
                        help='Generate training plots after training')
 
@@ -33,8 +35,15 @@ def main():
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
 
+    # Add preprocessed data path to config if provided
+    if args.preprocessed:
+        print(f"✅ Using preprocessed data: {args.preprocessed}")
+        config['preprocessed_data_path'] = args.preprocessed
+
     print("\n" + "="*70)
     print(f"TRAINING: {config['experiment_name']}")
+    if args.preprocessed:
+        print("MODE: FAST TRAINING (using preprocessed data)")
     print("="*70)
 
     # Train model

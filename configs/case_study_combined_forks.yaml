@@ -50,6 +50,7 @@ training:
   epochs: 150
   batch_size: 32
   learning_rate: 0.0005
+  test_size: 0.2
 
   # Loss function
   loss:
@@ -58,12 +59,18 @@ training:
     gamma: 2.0
 
   # Callbacks
-  early_stopping_patience: 25
-  reduce_lr_patience: 10
-  reduce_lr_factor: 0.5
+  early_stopping:
+    monitor: 'val_loss'
+    patience: 25
+    restore_best_weights: true
+
+  reduce_lr:
+    monitor: 'val_loss'
+    patience: 10
+    factor: 0.5
+    min_lr: 0.00001
 
   # Train/validation split
-  validation_split: 0.2
   random_state: 42
 
 output:
