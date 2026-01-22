@@ -1,0 +1,25 @@
+# Configuration for fork prediction step
+# Usage: python scripts/predict_forks.py --config configs/fork_prediction.yaml
+
+experiment_name: "fork_prediction_col0"
+
+# Input data
+data:
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40/NM30_Col0"
+  run_dirs:
+    - "NM30_plot_data_1strun_xy"
+    - "NM30_plot_data_2ndrun_xy"
+
+# Model configuration
+model:
+  fork_model_path: "models/case_study_jan2026/combined_fork_detector.keras"
+  max_length: 411
+  use_enhanced_encoding: true  # 9-channel encoding
+
+# Prediction parameters
+prediction:
+  fork_threshold: 0.5  # Probability threshold for calling forks
+
+# Output
+output:
+  results_dir: "results/fork_predictions"

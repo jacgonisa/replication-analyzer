@@ -1,0 +1,91 @@
+# Configuration for Origin Calling Pipeline
+# Predict forks with AI → Call origins from forks → Benchmark against curated data
+
+experiment_name: "ori_calling_ai_pipeline"
+
+data:
+  # XY signal data (for fork prediction) - Using Col0 data only
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40/NM30_Col0"
+  run_dirs:
+    - "NM30_plot_data_1strun_xy"
+    - "NM30_plot_data_2ndrun_xy"
+
+  # Curated origin dataset for benchmarking
+  curated_ori_bed: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/DNAscent_Col0_NM30_ColCEN_ORIs_curated_final.bed"
+
+# Model configuration
+model:
+  # Path to trained fork detection model
+  fork_model_path: "models/case_study_jan2026/combined_fork_detector.keras"
+
+  # Model parameters (must match training)
+  max_length: 411  # Based on training dataset (100th percentile)
+  use_enhanced_encoding: true  # 9-channel encoding
+
+# Fork calling configuration
+forks:
+  # If you want to use existing fork BED files instead of predicting
+  # (use with --skip-prediction flag)
+  left_forks_bed: null
+  right_forks_bed: null
+
+# Prediction thresholds
+prediction:
+  # Probability threshold for calling forks
+  fork_threshold: 0.5  # Adjust based on desired precision/recall balance
+
+# Origin calling parameters
+ori_calling:
+  # Minimum length for called origins (bp)
+  min_length: 100  # Filter out very small origins
+
+  # Optional: maximum gap to merge nearby origins
+  merge_gap: 0  # Set to 0 to disable merging
+
+# Benchmarking configuration
+benchmark:
+  # Minimum overlap (bp) to consider a match
+  min_overlap: 1  # At least 1bp overlap
+
+  # Minimum Jaccard index to consider a true positive
+  jaccard_threshold: 0.0  # 0.0 = any overlap counts
+  # For stricter matching, try 0.1 (10% overlap) or 0.2 (20% overlap)
+
+# Output configuration
+output:
+  # Results directory
+  results_dir: "results/ori_calling_ai_pipeline"
+
+  # Generate plots
+  generate_plots: true
+
+  # Save detailed overlap information
+  save_overlaps: true
+
+# Notes
+notes: |
+  Origin Calling Pipeline Configuration
+
+  Workflow:
+  1. Load trained fork detection model
+  2. Predict left and right forks on XY signal data
+  3. Infer origins from fork pairs (Left → Right pattern)
+  4. Benchmark predicted origins against curated dataset
+  5. Generate comprehensive evaluation plots
+
+  Key Parameters:
+  - fork_threshold: Higher = fewer, higher-confidence forks
+  - min_length: Filter out small/noisy origins
+  - jaccard_threshold: Stricter matching requires higher overlap
+
+  Expected Output:
+  - predicted_left_forks.bed
+  - predicted_right_forks.bed
+  - predicted_origins.bed
+  - predicted_terminations.bed
+  - benchmark_report.txt
+  - benchmark_plots/ (multiple visualizations)
+  - origin_overlaps.tsv (detailed matching info)
+
+  Usage:
+    python scripts/predict_forks_and_call_oris.py --config configs/ori_calling_pipeline.yaml

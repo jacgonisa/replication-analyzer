@@ -7,6 +7,7 @@ Deep learning models for detecting replication origins (ORIs) and replication fo
 This package provides modular, reproducible pipelines for:
 - **ORI Detection**: Binary classification of replication origin segments
 - **Fork Detection**: 3-class classification (background, left fork, right fork)
+- **Origin Calling**: Infer origins from predicted forks and benchmark against curated datasets
 
 ### Key Features
 
@@ -15,6 +16,7 @@ This package provides modular, reproducible pipelines for:
 - ✅ **Multi-channel Encoding**: 6 or 9-channel signal representations
 - ✅ **Focal Loss**: Handles severe class imbalance
 - ✅ **Regional Analysis**: Per-region evaluation (centromere, pericentromere, arms)
+- ✅ **Origin Calling**: Predict forks with AI → Call origins → Benchmark performance
 - ✅ **Config-based**: Easy to reproduce and modify experiments
 
 ## 📸 Gallery
@@ -264,6 +266,156 @@ replication-analyzer/
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical deep-dive: signal encoding & model architecture
 - **[Example Data](data/examples/)** - Small BED files demonstrating annotation format
 
+## Complete Pipeline: From Raw Data to Origin Calls 🎯
+
+### Modular Workflow
+
+The complete pipeline follows these steps:
+
+```
+1. Preprocessing → 2. Training → 3. Evaluation → 4. Prediction → 5. Origin Calling
+```
+
+Each step is independent and can be run separately, allowing you to:
+- Use different fork sources (AI predictions vs DNAscent annotations)
+- Iterate on origin calling parameters without re-running predictions
+- Test on different datasets
+
+---
+
+## Step 4: Fork Prediction
+
+Predict left and right replication forks from signal data using your trained AI model.
+
+### Quick Start
+
+```bash
+# Run fork prediction
+python scripts/predict_forks.py --config configs/fork_prediction.yaml
+```
+
+**Configuration** (`configs/fork_prediction.yaml`):
+```yaml
+experiment_name: "fork_prediction_col0"
+
+data:
+  base_dir: "/path/to/xy_data"
+  run_dirs:
+    - "NM30_plot_data_1strun_xy"
+    - "NM30_plot_data_2ndrun_xy"
+
+model:
+  fork_model_path: "models/combined_fork_detector.keras"
+  max_length: 411
+
+prediction:
+  fork_threshold: 0.5
+
+output:
+  results_dir: "results/fork_predictions"
+```
+
+**Output**:
+- `predicted_left_forks.bed` - All predicted left forks (BED format)
+- `predicted_right_forks.bed` - All predicted right forks (BED format)
+
+---
+
+## Step 5: Origin Calling & Benchmarking
+
+Call origins from fork predictions (AI or DNAscent) and benchmark against curated datasets.
+
+### Quick Start
+
+```bash
+# Call origins from AI-predicted forks
+python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml
+
+# Or call origins from DNAscent forks
+python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml \
+    --left-forks /path/to/dnascent_left_forks.bed \
+    --right-forks /path/to/dnascent_right_forks.bed
+```
+
+**Configuration** (`configs/ori_calling.yaml`):
+```yaml
+experiment_name: "ori_calling_from_ai_forks"
+
+forks:
+  left_forks_bed: "results/fork_predictions/predicted_left_forks.bed"
+  right_forks_bed: "results/fork_predictions/predicted_right_forks.bed"
+
+ori_calling:
+  min_length: 0  # Minimum origin length (bp)
+
+data:
+  curated_ori_bed: "/path/to/curated_origins.bed"
+
+benchmark:
+  min_overlap: 1
+  jaccard_threshold: 0.0
+
+output:
+  results_dir: "results/ori_calling"
+```
+
+**Output Files**:
+```
+results/ori_calling/
+├── predicted_origins.bed         # Inferred origins (L→R patterns)
+├── predicted_terminations.bed    # Inferred terminations (R→L patterns)
+├── benchmark_report.txt          # Performance metrics
+├── origin_overlaps.tsv           # Detailed overlap analysis
+└── benchmark_plots/
+    ├── overall_metrics.png       # Precision/Recall/F1
+    ├── confusion_matrix.png      # TP/FP/FN breakdown
+    ├── per_chromosome_metrics.png
+    ├── jaccard_distribution.png  # Overlap quality
+    └── length_comparison.png     # Predicted vs curated
+```
+
+**What This Does**:
+1. Loads fork BED files (from Step 4 or DNAscent)
+2. Identifies **origins**: Left fork → Right fork (L→R) patterns on same read
+3. Identifies **terminations**: Right fork → Left fork (R→L) patterns
+4. Benchmarks predicted origins against curated dataset
+5. Generates comprehensive evaluation plots
+
+**Advanced Options**:
+
+```bash
+# Skip benchmarking (if no curated data available)
+python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml --skip-benchmark
+
+# Override output directory
+python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml \
+    --output-dir results/custom_output
+```
+
+---
+
+## Recent Results (January 2026)
+
+### AI Fork Predictions vs DNAscent
+
+| Method | Origins Called | Precision | Recall | F1 Score |
+|--------|---------------|-----------|--------|----------|
+| **AI Model** | 1,331 | **95.3%** | 12.0% | 0.214 |
+| DNAscent | 701 | 94.3% | 6.3% | 0.118 |
+
+**Key Findings**:
+- AI model identifies **2× more origins** than DNAscent while maintaining precision
+- Both methods show high precision but low recall (curated dataset has 10,550 origins)
+- Mean origin length: 9,669 bp (AI) vs 6,461 bp (curated)
+
+---
+
+## Tuning Parameters
+
+- **fork_threshold**: Higher = fewer but higher-confidence forks (default: 0.5)
+- **min_length**: Minimum origin length in bp (default: 0)
+- **jaccard_threshold**: Minimum Jaccard overlap for true positive (default: 0.0)
+
 ## For Collaborators
 
 ### Analyzing New Fork Data
@@ -280,6 +432,10 @@ When you receive new fork annotations:
    ```bash
    python scripts/evaluate_model.py --model models/fork_model.keras \
        --data-config configs/new_forks.yaml --output results/new_forks/
+   ```
+5. **Call origins and benchmark**:
+   ```bash
+   python scripts/predict_forks_and_call_oris.py --config configs/ori_calling_pipeline.yaml
    ```
 
 ### Batch Processing Multiple Datasets

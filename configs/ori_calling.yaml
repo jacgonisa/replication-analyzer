@@ -1,0 +1,25 @@
+# Configuration for origin calling step
+# Usage: python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml
+
+experiment_name: "ori_calling_from_ai_forks"
+
+# Fork predictions (from predict_forks.py output)
+forks:
+  left_forks_bed: "results/fork_predictions/predicted_left_forks.bed"
+  right_forks_bed: "results/fork_predictions/predicted_right_forks.bed"
+
+# Origin calling parameters
+ori_calling:
+  min_length: 0  # Minimum origin length in bp (0 = no filter)
+
+# Benchmarking (optional)
+data:
+  curated_ori_bed: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/DNAscent_Col0_NM30_ColCEN_ORIs_curated_final.bed"
+
+benchmark:
+  min_overlap: 1  # Minimum overlap in bp to count as match
+  jaccard_threshold: 0.0  # Minimum Jaccard index (0 = any overlap)
+
+# Output
+output:
+  results_dir: "results/ori_calling_from_ai"
