@@ -394,22 +394,6 @@ python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml \
 
 ---
 
-## Recent Results (January 2026)
-
-### AI Fork Predictions vs DNAscent
-
-| Method | Origins Called | Precision | Recall | F1 Score |
-|--------|---------------|-----------|--------|----------|
-| **AI Model** | 1,331 | **95.3%** | 12.0% | 0.214 |
-| DNAscent | 701 | 94.3% | 6.3% | 0.118 |
-
-**Key Findings**:
-- AI model identifies **2× more origins** than DNAscent while maintaining precision
-- Both methods show high precision but low recall (curated dataset has 10,550 origins)
-- Mean origin length: 9,669 bp (AI) vs 6,461 bp (curated)
-
----
-
 ## Tuning Parameters
 
 - **fork_threshold**: Higher = fewer but higher-confidence forks (default: 0.5)
