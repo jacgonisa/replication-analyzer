@@ -25,8 +25,19 @@ The model is trained jointly on both genotypes to learn features that generalise
 
 ## Reads
 
-**Minimum read length:** 30 kb (filter applied at data collection)  
-**Minimum nascent DNA fraction:** 40% (`nascent40` filter)
+**QC filters (applied before any training):**
+- **Minimum read length:** 30 kb — removes reads too short for meaningful segmentation
+- **Minimum nascent DNA fraction:** 40% — keeps only actively replicating reads; reads below this have too little BrdU signal
+
+The 44,798 reads are **all reads passing both filters** across the 4 sequencing runs — no subsampling was applied.
+
+| Run | Genotype | Reads |
+|-----|----------|-------|
+| NM30 — run 1 | Col-0 | 15,936 |
+| NM30 — run 2 | Col-0 | 8,409 |
+| NM31 — run 1 | *orc1b orc2* | 12,849 |
+| NM31 — run 2 | *orc1b orc2* | 7,604 |
+| **Total** | | **44,798** |
 
 | Split | Reads | Windows |
 |-------|-------|---------|
