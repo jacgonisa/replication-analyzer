@@ -108,7 +108,7 @@ class MultiClassF1Score(tf.keras.metrics.Metric):
         self.false_negatives.assign(tf.zeros_like(self.false_negatives))
 
 
-def create_callbacks(config, model_path='best_model.keras'):
+def create_callbacks(config, model_path='best_model.keras', backup_dir=None):
     """
     Create standard callbacks for training.
 
@@ -118,6 +118,10 @@ def create_callbacks(config, model_path='best_model.keras'):
         Training configuration with callback settings
     model_path : str
         Path to save best model
+    backup_dir : str or None
+        Directory for BackupAndRestore mid-run checkpointing.
+        When set, training automatically resumes from the last saved point
+        if the process is killed and restarted.
 
     Returns
     -------
@@ -125,6 +129,19 @@ def create_callbacks(config, model_path='best_model.keras'):
         List of Keras callbacks
     """
     callbacks = []
+
+    # BackupAndRestore must be first so other callbacks see the restored state.
+    # This saves a full optimizer + model checkpoint after every epoch so that
+    # re-running model.fit() on the same backup_dir automatically continues
+    # from the last completed epoch rather than starting over.
+    if backup_dir is not None:
+        callbacks.append(
+            tf.keras.callbacks.BackupAndRestore(
+                backup_dir=backup_dir,
+                save_freq="epoch",
+                delete_checkpoint=False,
+            )
+        )
 
     # Early stopping
     if config.get('early_stopping', {}).get('enabled', True):

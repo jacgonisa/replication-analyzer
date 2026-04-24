@@ -156,14 +156,28 @@ def load_fork_data(left_forks_bed: str, right_forks_bed: str) -> Tuple[pd.DataFr
 
     # Left forks
     left_forks = pd.read_csv(left_forks_bed, sep='\t', header=None)
-    left_forks.columns = ['chr', 'start', 'end', 'read_id', 'read_chr',
-                          'read_start', 'read_end', 'direction']
+    # Handle both 7-column (no direction) and 8-column (with direction) formats
+    if left_forks.shape[1] == 7:
+        left_forks.columns = ['chr', 'start', 'end', 'read_id', 'read_chr',
+                              'read_start', 'read_end']
+    elif left_forks.shape[1] == 8:
+        left_forks.columns = ['chr', 'start', 'end', 'read_id', 'read_chr',
+                              'read_start', 'read_end', 'direction']
+    else:
+        raise ValueError(f"Expected 7 or 8 columns in left_forks_bed, got {left_forks.shape[1]}")
     print(f"  Left forks: {len(left_forks):,} regions from {left_forks['read_id'].nunique()} reads")
 
     # Right forks
     right_forks = pd.read_csv(right_forks_bed, sep='\t', header=None)
-    right_forks.columns = ['chr', 'start', 'end', 'read_id', 'read_chr',
-                           'read_start', 'read_end', 'direction']
+    # Handle both 7-column (no direction) and 8-column (with direction) formats
+    if right_forks.shape[1] == 7:
+        right_forks.columns = ['chr', 'start', 'end', 'read_id', 'read_chr',
+                               'read_start', 'read_end']
+    elif right_forks.shape[1] == 8:
+        right_forks.columns = ['chr', 'start', 'end', 'read_id', 'read_chr',
+                               'read_start', 'read_end', 'direction']
+    else:
+        raise ValueError(f"Expected 7 or 8 columns in right_forks_bed, got {right_forks.shape[1]}")
     print(f"  Right forks: {len(right_forks):,} regions from {right_forks['read_id'].nunique()} reads")
 
     return left_forks, right_forks

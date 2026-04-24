@@ -27,9 +27,12 @@ from .data.preprocessing import (
     pad_sequences
 )
 
-from .models.ori_model import build_ori_expert_model, build_ori_simple_model
-from .models.fork_model import build_fork_detection_model
-from .models.losses import FocalLoss, MultiClassFocalLoss
+# Model imports are intentionally NOT here — importing them triggers TensorFlow
+# initialization which consumes ~400-800 MB even in preprocessing-only runs.
+# Import models directly from their submodules when needed:
+#   from replication_analyzer.models.fork_model import build_fork_detection_model
+#   from replication_analyzer.models.ori_model import build_ori_expert_model
+#   from replication_analyzer.models.losses import FocalLoss
 
 __all__ = [
     # Data loading
@@ -44,11 +47,4 @@ __all__ = [
     'prepare_ori_data_hybrid',
     'prepare_fork_data_hybrid',
     'pad_sequences',
-    # Models
-    'build_ori_expert_model',
-    'build_ori_simple_model',
-    'build_fork_detection_model',
-    # Losses
-    'FocalLoss',
-    'MultiClassFocalLoss',
 ]

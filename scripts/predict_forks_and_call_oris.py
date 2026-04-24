@@ -32,6 +32,9 @@ from replication_analyzer.evaluation.benchmark import (
 )
 from replication_analyzer.evaluation.bed_utils import write_bed_file
 
+# Import custom layers for model loading
+from replication_analyzer.models.base import SelfAttention
+
 import tensorflow as tf
 
 
@@ -64,10 +67,11 @@ def predict_forks(model_path, xy_data, max_length, use_enhanced_encoding=True,
     print("STEP 1: PREDICTING FORKS WITH AI MODEL")
     print("=" * 70)
 
-    # Load model
-    print(f"\nLoading fork detection model: {model_path}")
-    model = tf.keras.models.load_model(model_path, compile=False)
-    print("✅ Model loaded successfully")
+    # Load model with custom objects and safe_mode=False for Lambda layers
+    print(f"\nLoading fork detection model: {model_path}", flush=True)
+    custom_objects = {'SelfAttention': SelfAttention}
+    model = tf.keras.models.load_model(model_path, custom_objects=custom_objects, compile=False, safe_mode=False)
+    print("✅ Model loaded successfully", flush=True)
 
     # Predict on all reads
     print(f"\nPredicting on {xy_data['read_id'].nunique():,} reads...")
