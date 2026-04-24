@@ -136,6 +136,7 @@ replication-analyzer/
 | Document | Contents |
 |----------|----------|
 | [FORTE_PROGRESS.md](FORTE_PROGRESS.md) | Full model version history, ORI recall diagnostics, AI vs annotator agreement |
+| [DATASET.md](DATASET.md) | Training data: read counts, annotation sources (human vs pseudo), signal encoding, class imbalance |
 | [CODEX/README.md](CODEX/README.md) | FORTE training system: config reference, training loop, evaluation pipeline |
 | [CODEX/EXPERIMENT_LOG.md](CODEX/EXPERIMENT_LOG.md) | Detailed per-experiment notes and decisions |
 
