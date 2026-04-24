@@ -1,442 +1,146 @@
-# Replication Analyzer 🧬
+# replication-analyzer
 
-Deep learning models for detecting replication origins (ORIs) and replication forks in BrdU/EdU labeled DNA sequencing data.
+Deep learning pipeline for annotating replication forks and origins of replication (ORIs) in single-molecule BrdU-labelled nascent DNA sequencing reads.
 
-## Overview
+The core model — **FORTE** (Fork and ORigin Tracking Engine) — performs per-window 4-class segmentation of long reads: background, left fork, right fork, and origin.
 
-This package provides modular, reproducible pipelines for:
-- **ORI Detection**: Binary classification of replication origin segments
-- **Fork Detection**: 3-class classification (background, left fork, right fork)
-- **Origin Calling**: Infer origins from predicted forks and benchmark against curated datasets
+---
 
-### Key Features
+## How it works
 
-- ✅ **Expert Models**: CNN + BiLSTM + Self-Attention architecture
-- ✅ **Hybrid Balancing**: Combined oversampling + undersampling for class balance
-- ✅ **Multi-channel Encoding**: 6 or 9-channel signal representations
-- ✅ **Focal Loss**: Handles severe class imbalance
-- ✅ **Regional Analysis**: Per-region evaluation (centromere, pericentromere, arms)
-- ✅ **Origin Calling**: Predict forks with AI → Call origins → Benchmark performance
-- ✅ **Config-based**: Easy to reproduce and modify experiments
+Each read is encoded as a multi-channel time series (9 channels: wavelet decomposition + rectangular block features) and passed through a **CNN → BiLSTM → Self-Attention** network that assigns per-window class probabilities. Consecutive high-probability windows are merged into genomic events.
 
-## 📸 Gallery
+### Example predictions
 
-### Workflow Overview
+**Good prediction** — left fork, origin, and right fork correctly identified (IoU: LF=1.00, RF=0.97, ORI=1.00):
 
-Complete pipeline from data input to annotation:
+![Good prediction](docs/images/forte/example_good_01.png)
 
-![Workflow](docs/images/workflow.png)
+**Challenging read** — complex multi-feature read with label/boundary ambiguity:
 
-### Model Architecture
+![Challenging prediction](docs/images/forte/example_bad_01.png)
 
-Expert Model: Multi-scale CNN + Bidirectional LSTM + Self-Attention
+**Missed origin** (Cat B) — a short Nerea-annotated ORI (~2 kb) the model does not detect above threshold. The probability track shows sub-threshold ORI signal, consistent with the small-ORI recall problem:
 
-![Architecture](docs/images/architecture.png)
+![Missed ORI](docs/images/forte/ori_nerea_missed_01.png)
 
-### Training Progress
+*Top panel: BrdU signal (step) + annotation spans (solid = GT, hatched = predicted).  
+Bottom panel: per-class probability tracks; dashed line = detection threshold.*
 
-Example training history showing convergence:
+---
 
-![Training History](docs/images/training_history.png)
+## Parameter sweep
 
-### Prediction Example
+Threshold heatmaps show precision, recall, and F1 across a grid of probability thresholds × IoU matching thresholds. Blue border = best F1 cell. Evaluated on human-annotated GT reads (FORTE v5.1):
 
-Model prediction on a single read showing ORI detection:
+![Threshold heatmap — human GT](docs/images/forte/threshold_heatmap_human.png)
 
-![Example Prediction](docs/images/example_prediction.png)
+Key takeaway: fork recall is robust (LF≈0.83, RF≈0.87 at prob=0.3); ORI recall plateaus at ~60% regardless of threshold — a structural limit from short ORIs (<1 kb) that span too few model windows.
+
+---
+
+## Training
+
+Training history for FORTE v5.2 (6 panels: loss, event-level IoU, F1, precision, recall, learning rate). The LR warmup ramp is visible in the first 5 epochs:
+
+![Training history](docs/images/forte/training_history_v5.2.png)
+
+---
+
+## Model versions
+
+See **[FORTE_PROGRESS.md](FORTE_PROGRESS.md)** for the full version history (v4.0 → v5.3), architectural decisions, ORI recall diagnostics, and AI vs human-annotator agreement stats.
+
+Current best model: **FORTE v5.3** (training in progress — recall-weighted monitor).
+
+| Version | Key change | ORI recall |
+|---------|-----------|-----------|
+| v5.1 | Human ORI labels + HP-tuned hyperparameters | 0.82 |
+| v5.2 | Small-ORI 2× oversampling + LR warmup | 0.82 |
+| v5.3 | Recall-weighted monitor | in progress |
+
+---
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone <repo-url>
+git clone https://github.com/jacgonisa/replication-analyzer.git
 cd replication-analyzer
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install package in development mode
 pip install -e .
 ```
 
-## Quick Start
+Requires Python ≥ 3.9, TensorFlow ≥ 2.13, and the packages in `requirements.txt`.
 
-### 1. Prepare Your Data
+---
 
-Organize your data as follows:
-```
-data/
-├── raw/
-│   ├── NM30_plot_data_1strun_xy/     # XY signal data (run 1)
-│   ├── NM30_plot_data_2ndrun_xy/     # XY signal data (run 2)
-│   ├── curated_origins.bed           # ORI annotations
-│   ├── left_forks.bed                # Left fork annotations
-│   └── right_forks.bed               # Right fork annotations
-└── annotations/
-    ├── centromere.bed
-    └── pericentromere_clean.bed
-```
+## Quick start — predict and annotate
 
-### 2. Train ORI Detection Model
-
-```python
-from replication_analyzer import (
-    load_all_xy_data,
-    load_curated_origins,
-    prepare_ori_data_hybrid,
-    pad_sequences,
-    build_ori_expert_model,
-    FocalLoss
-)
-from sklearn.model_selection import train_test_split
-
-# Load data
-xy_data = load_all_xy_data(
-    base_dir='data/raw',
-    run_dirs=['NM30_plot_data_1strun_xy', 'NM30_plot_data_2ndrun_xy']
-)
-ori_annotations = load_curated_origins('data/raw/curated_origins.bed')
-
-# Prepare data (hybrid balancing)
-X_seq, y_seq, info = prepare_ori_data_hybrid(
-    xy_data, ori_annotations,
-    oversample_ratio=0.5,
-    use_enhanced_encoding=True
-)
-
-# Pad sequences
-X_padded, y_padded, max_length = pad_sequences(X_seq, y_seq, percentile=100)
-
-# Reshape labels
-y_binary = (y_padded > 0.3).astype('float32').reshape(-1, max_length, 1)
-
-# Train/val split
-X_train, X_val, y_train, y_val = train_test_split(
-    X_padded, y_binary, test_size=0.2, random_state=42
-)
-
-# Build model
-model = build_ori_expert_model(max_length=max_length, n_channels=9)
-
-# Compile
-model.compile(
-    optimizer='adam',
-    loss=FocalLoss(alpha=0.25, gamma=2.0),
-    metrics=['accuracy']
-)
-
-# Train
-history = model.fit(
-    X_train, y_train,
-    validation_data=(X_val, y_val),
-    epochs=100,
-    batch_size=32
-)
-
-# Save model
-model.save('models/ori_expert_model.keras')
-```
-
-### 3. Train Fork Detection Model
-
-```python
-from replication_analyzer import (
-    load_fork_data,
-    prepare_fork_data_hybrid,
-    build_fork_detection_model,
-    MultiClassFocalLoss
-)
-
-# Load fork data
-left_forks, right_forks = load_fork_data(
-    'data/raw/left_forks.bed',
-    'data/raw/right_forks.bed'
-)
-
-# Prepare data
-X_seq, y_seq, info = prepare_fork_data_hybrid(
-    xy_data, left_forks, right_forks,
-    oversample_ratio=0.5
-)
-
-# Pad and train (similar to ORI model)
-X_padded, y_padded, max_length = pad_sequences(X_seq, y_seq)
-
-# Build 3-class model
-model = build_fork_detection_model(max_length=max_length, n_channels=9)
-
-# Use multi-class focal loss
-model.compile(
-    optimizer='adam',
-    loss=MultiClassFocalLoss(alpha=[1.0, 2.0, 2.0], gamma=2.0),
-    metrics=['accuracy']
-)
-
-# Train...
-```
-
-## Using Config Files (Recommended)
-
-Create a config file `configs/my_experiment.yaml`:
-
-```yaml
-experiment_name: "ori_detection_run1"
-
-data:
-  base_dir: "data/raw"
-  run_dirs:
-    - "NM30_plot_data_1strun_xy"
-    - "NM30_plot_data_2ndrun_xy"
-  ori_bed: "data/raw/curated_origins.bed"
-
-preprocessing:
-  oversample_ratio: 0.5
-  percentile: 100
-  use_enhanced_encoding: true
-
-model:
-  type: "ori_expert"
-  max_length: 200
-  n_channels: 9
-  cnn_filters: 64
-  lstm_units: 128
-  dropout_rate: 0.3
-
-training:
-  epochs: 150
-  batch_size: 32
-  learning_rate: 0.0005
-  loss:
-    type: "focal"
-    alpha: 0.25
-    gamma: 2.0
-  early_stopping_patience: 25
-
-output:
-  model_path: "models/ori_expert_model.keras"
-  results_dir: "results/ori_run1"
-```
-
-Then run:
 ```bash
-python scripts/train_ori_model.py --config configs/my_experiment.yaml
+# Predict forks and call ORIs on new reads
+python scripts/predict_forks_and_call_oris.py \
+    --config configs/forte_v5.1.yaml \
+    --model  CODEX/models/forte_v5.1.keras \
+    --output results/my_run/
 ```
 
-## Project Structure
+Output: `reannotated_events.tsv` with columns `read_id, chr, start, end, event_type, length, max_prob, mean_prob`.
+
+---
+
+## Training a new model
+
+All experiments are config-driven. Copy and modify an existing FORTE config:
+
+```bash
+cp CODEX/configs/forte_v5.1.yaml CODEX/configs/forte_my_exp.yaml
+# Edit experiment_name, data paths, hyperparameters
+python CODEX/scripts/train_weak5_codex.py --config CODEX/configs/forte_my_exp.yaml
+```
+
+After training, run the full evaluation pipeline:
+
+```bash
+# Training history + test evaluation + threshold heatmaps + Nerea agreement
+# (See /evaluation-complete skill for step-by-step commands)
+```
+
+See **[CODEX/README.md](CODEX/README.md)** for the full FORTE training system documentation.
+
+---
+
+## Repository structure
 
 ```
 replication-analyzer/
-├── replication_analyzer/      # Main package
-│   ├── data/                  # Data loading, encoding, preprocessing
-│   ├── models/                # Model architectures and losses
-│   ├── training/              # Training pipelines
-│   ├── evaluation/            # Metrics and evaluation
-│   └── visualization/         # Plotting utilities
-├── scripts/                   # Executable scripts
-├── configs/                   # Configuration files
-├── notebooks/                 # Jupyter notebooks
-├── data/                      # Data directory (gitignored)
-├── models/                    # Saved models (gitignored)
-└── results/                   # Results (gitignored)
-```
-
-## Key Components
-
-### Signal Encoding
-- **Basic (6 channels)**: Normalized, smooth, gradient, 2nd derivative, local mean/std
-- **Enhanced (9 channels)**: + Z-score, cumulative trend, signal envelope
-
-### Models
-- **ORI Expert Model**: Multi-scale CNN + BiLSTM + Attention
-- **Fork Detection Model**: Same architecture, 3-class output
-- **Simple Models**: Baseline CNN architectures
-
-### Balancing Strategy
-- **Hybrid**: Combines oversampling minority + undersampling majority
-- Target: ~1:1 read-level balance
-- Handles segment-level imbalance with Focal Loss
-
-## 📖 Documentation
-
-- **[USAGE_GUIDE.md](USAGE_GUIDE.md)** - Complete step-by-step guide for training and annotation
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical deep-dive: signal encoding & model architecture
-- **[Example Data](data/examples/)** - Small BED files demonstrating annotation format
-
-## Complete Pipeline: From Raw Data to Origin Calls 🎯
-
-### Modular Workflow
-
-The complete pipeline follows these steps:
-
-```
-1. Preprocessing → 2. Training → 3. Evaluation → 4. Prediction → 5. Origin Calling
-```
-
-Each step is independent and can be run separately, allowing you to:
-- Use different fork sources (AI predictions vs DNAscent annotations)
-- Iterate on origin calling parameters without re-running predictions
-- Test on different datasets
-
----
-
-## Step 4: Fork Prediction
-
-Predict left and right replication forks from signal data using your trained AI model.
-
-### Quick Start
-
-```bash
-# Run fork prediction
-python scripts/predict_forks.py --config configs/fork_prediction.yaml
-```
-
-**Configuration** (`configs/fork_prediction.yaml`):
-```yaml
-experiment_name: "fork_prediction_col0"
-
-data:
-  base_dir: "/path/to/xy_data"
-  run_dirs:
-    - "NM30_plot_data_1strun_xy"
-    - "NM30_plot_data_2ndrun_xy"
-
-model:
-  fork_model_path: "models/combined_fork_detector.keras"
-  max_length: 411
-
-prediction:
-  fork_threshold: 0.5
-
-output:
-  results_dir: "results/fork_predictions"
-```
-
-**Output**:
-- `predicted_left_forks.bed` - All predicted left forks (BED format)
-- `predicted_right_forks.bed` - All predicted right forks (BED format)
-
----
-
-## Step 5: Origin Calling & Benchmarking
-
-Call origins from fork predictions (AI or DNAscent) and benchmark against curated datasets.
-
-### Quick Start
-
-```bash
-# Call origins from AI-predicted forks
-python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml
-
-# Or call origins from DNAscent forks
-python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml \
-    --left-forks /path/to/dnascent_left_forks.bed \
-    --right-forks /path/to/dnascent_right_forks.bed
-```
-
-**Configuration** (`configs/ori_calling.yaml`):
-```yaml
-experiment_name: "ori_calling_from_ai_forks"
-
-forks:
-  left_forks_bed: "results/fork_predictions/predicted_left_forks.bed"
-  right_forks_bed: "results/fork_predictions/predicted_right_forks.bed"
-
-ori_calling:
-  min_length: 0  # Minimum origin length (bp)
-
-data:
-  curated_ori_bed: "/path/to/curated_origins.bed"
-
-benchmark:
-  min_overlap: 1
-  jaccard_threshold: 0.0
-
-output:
-  results_dir: "results/ori_calling"
-```
-
-**Output Files**:
-```
-results/ori_calling/
-├── predicted_origins.bed         # Inferred origins (L→R patterns)
-├── predicted_terminations.bed    # Inferred terminations (R→L patterns)
-├── benchmark_report.txt          # Performance metrics
-├── origin_overlaps.tsv           # Detailed overlap analysis
-└── benchmark_plots/
-    ├── overall_metrics.png       # Precision/Recall/F1
-    ├── confusion_matrix.png      # TP/FP/FN breakdown
-    ├── per_chromosome_metrics.png
-    ├── jaccard_distribution.png  # Overlap quality
-    └── length_comparison.png     # Predicted vs curated
-```
-
-**What This Does**:
-1. Loads fork BED files (from Step 4 or DNAscent)
-2. Identifies **origins**: Left fork → Right fork (L→R) patterns on same read
-3. Identifies **terminations**: Right fork → Left fork (R→L) patterns
-4. Benchmarks predicted origins against curated dataset
-5. Generates comprehensive evaluation plots
-
-**Advanced Options**:
-
-```bash
-# Skip benchmarking (if no curated data available)
-python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml --skip-benchmark
-
-# Override output directory
-python scripts/call_origins_from_forks.py --config configs/ori_calling.yaml \
-    --output-dir results/custom_output
+├── replication_analyzer/       # Core Python package
+│   ├── data/                   # Signal encoding (wavelet, rectangular blocks)
+│   ├── models/                 # CNN-BiLSTM-Attention architecture
+│   ├── training/               # Training callbacks (focal loss, LR warmup)
+│   ├── evaluation/             # Event-level IoU metrics
+│   └── visualization/          # Read and training history plots
+├── CODEX/
+│   ├── replication_analyzer_codex/  # FORTE training library
+│   ├── configs/                     # Experiment configs (forte_v*.yaml)
+│   └── scripts/                     # Training, evaluation, and plotting scripts
+├── scripts/                    # Prediction and ORI calling pipeline
+├── configs/                    # Legacy configs
+├── docs/images/forte/          # Figures used in this README
+├── FORTE_PROGRESS.md           # Version history and key results
+└── requirements.txt
 ```
 
 ---
 
-## Tuning Parameters
+## Documentation
 
-- **fork_threshold**: Higher = fewer but higher-confidence forks (default: 0.5)
-- **min_length**: Minimum origin length in bp (default: 0)
-- **jaccard_threshold**: Minimum Jaccard overlap for true positive (default: 0.0)
+| Document | Contents |
+|----------|----------|
+| [FORTE_PROGRESS.md](FORTE_PROGRESS.md) | Full model version history, ORI recall diagnostics, AI vs annotator agreement |
+| [CODEX/README.md](CODEX/README.md) | FORTE training system: config reference, training loop, evaluation pipeline |
+| [CODEX/EXPERIMENT_LOG.md](CODEX/EXPERIMENT_LOG.md) | Detailed per-experiment notes and decisions |
 
-## For Collaborators
-
-### Analyzing New Fork Data
-
-When you receive new fork annotations:
-
-1. **Place data in `data/raw/`**
-2. **Update config file** with new paths
-3. **Run training**:
-   ```bash
-   python scripts/train_fork_model.py --config configs/new_forks.yaml
-   ```
-4. **Evaluate**:
-   ```bash
-   python scripts/evaluate_model.py --model models/fork_model.keras \
-       --data-config configs/new_forks.yaml --output results/new_forks/
-   ```
-5. **Call origins and benchmark**:
-   ```bash
-   python scripts/predict_forks_and_call_oris.py --config configs/ori_calling_pipeline.yaml
-   ```
-
-### Batch Processing Multiple Datasets
-
-See `scripts/batch_process.py` for processing multiple fork datasets in parallel.
+---
 
 ## Citation
 
-If you use this code, please cite:
-```
-[To be added when published]
-```
-
-## License
-
-Private repository - not for public distribution.
-
-## Contact
-
-For questions or issues, contact: [Your contact info]
+Manuscript in preparation.
