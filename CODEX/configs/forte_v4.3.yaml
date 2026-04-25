@@ -1,0 +1,110 @@
+experiment_name: "forte_v4.3"
+
+# FORTE v4.3 — FORTE-ForkML hybrid design
+#
+# Key improvements over v4/v4.2:
+#   1. Fork pseudo-labels at thr=0.20 (vs 0.45): 23k LF + 23k RF (vs 5k+4k)
+#      → 55% of ORIs are now flanked (vs 12% before)
+#   2. ORI labels: flanked only (33,378 across 9,108 reads)
+#      → teaches BiLSTM that ORIs are always flanked by forks
+#   3. Monitor val_loss (not val_masked_f1_macro) for checkpoint + early stopping
+#      → avoids epoch-1 best problem caused by low precision inflating F1 variance
+#   4. MaskedMeanIoU now tracked during training (alongside F1) — ForkML-style
+#   5. HP tuning will determine final lr/batch_size/architecture
+#      → this config uses sensible defaults for preprocessing only
+#
+# Annotation counts:
+#   left_forks:  23,333  (real 5,184 + pseudo 18,150, model thr=0.20)
+#   right_forks: 23,514  (real 4,386 + pseudo 19,128, model thr=0.20)
+#   origins:     33,378  (flanked subset of 60,317 combined, ±100kb)
+#
+# Requires fresh preprocessing (new annotations).
+
+data:
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40"
+  run_dirs:
+    - "NM30_Col0/NM30_plot_data_1strun_xy"
+    - "NM30_Col0/NM30_plot_data_2ndrun_xy"
+    - "NM31_orc1b2/NM31_plot_data_1strun_xy"
+    - "NM31_orc1b2/NM31_plot_data_2ndrun_xy"
+  left_forks_bed:  "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v4.3/pseudo_labels/combined_left_fork.bed"
+  right_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v4.3/pseudo_labels/combined_right_fork.bed"
+  ori_annotations_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v4.3/training_labels/flanked_origin.bed"
+  termination_annotations_bed:
+  xy_cache_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/cache/xy_data.pkl"
+  xy_cache_log_every: 500
+  xy_cache_chunk_size: 250
+  preprocessed_dataset_path: "CODEX/results/forte_v4.3/preprocessed_forte_v4.3.npz"
+  split_manifest: "CODEX/results/forte_v4.3/preprocessed_forte_v4.3.split_manifest.tsv"
+
+preprocessing:
+  use_rectangular_blocks: true
+  signal_mode: "wavelet"
+  smooth_sigma: 2
+  local_window: 50
+  wavelet: "db4"
+  wavelet_level: 2
+  percentile: 100
+  oversample_ratio: 0.5
+  encode_chunk_size: 1000
+  flip_augment: true
+
+labeling:
+  trusted_negative_margin_bp: 0
+  termination_min_len_bp: 1
+
+model:
+  n_classes: 4
+  n_channels: 9
+  cnn_filters: 128
+  lstm_units: 128
+  dropout_rate: 0.209
+
+training:
+  epochs: 150
+  batch_size: 128
+  learning_rate: 0.003489
+  val_fraction: 0.2
+  test_fraction: 0.0
+  random_seed: 42
+  loss:
+    alpha: [1.0, 2.427, 2.124, 2.5]
+    gamma: 2.657
+  early_stopping:
+    monitor: "val_masked_mean_iou"
+    patience: 40
+    mode: "max"
+    restore_best_weights: true
+    enabled: true
+  reduce_lr:
+    monitor: "val_loss"
+    patience: 15
+    factor: 0.5
+    min_lr: 0.00001
+    mode: "min"
+    enabled: true
+  checkpoint:
+    monitor: "val_masked_mean_iou"
+    save_best_only: true
+    mode: "max"
+    enabled: true
+
+evaluation:
+  active_event_types: ["left_fork", "right_fork", "origin"]
+  probability_thresholds: [0.3, 0.35, 0.4, 0.45, 0.5, 0.6]
+  iou_thresholds: [0.2, 0.3, 0.4, 0.5, 0.6]
+  min_windows: 1
+  max_gap: 5000
+
+reannotation:
+  probability_thresholds:
+    left_fork: 0.4
+    right_fork: 0.4
+    origin: 0.4
+  min_windows: 1
+  max_gap: 5000
+
+output:
+  model_dir: "CODEX/models"
+  model_filename: "forte_v4.3_run3.keras"
+  results_dir: "CODEX/results/forte_v4.3"

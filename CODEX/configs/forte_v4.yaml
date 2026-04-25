@@ -1,0 +1,113 @@
+experiment_name: "forte_v4"
+
+# FORTE v4 — v2 annotations + working flip augmentation
+#
+# This completes the 2×2 experiment matrix:
+#
+#   |                    | Flip broken | Flip working |
+#   |--------------------|-------------|--------------|
+#   | Real ORIs only     | v2_cons     | v3           |
+#   | Pseudo-ORIs (~42k) | v2          | v4  ← this   |
+#
+# Key changes vs FORTE v2:
+#   - flip_augment is NOW ACTUALLY IMPLEMENTED in training.py
+#     (previously the config key was present but silently ignored)
+#   - Left_fork focal loss weight raised 2.0 → 2.5 (same as v3)
+#
+# Annotation set (same as v2):
+#   left_forks:  5,184  (real 2,133 + ORI-validated pseudo 3,051, thresh 0.45)
+#   right_forks: 4,386  (real 1,944 + ORI-validated pseudo 2,442, thresh 0.45)
+#   origins:    ~42,000 (21,334 real + ~20,668 pseudo from v4 model)
+#
+# Reuses v2 preprocessed chunks — no re-preprocessing needed.
+
+data:
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40"
+  run_dirs:
+    - "NM30_Col0/NM30_plot_data_1strun_xy"
+    - "NM30_Col0/NM30_plot_data_2ndrun_xy"
+    - "NM31_orc1b2/NM31_plot_data_1strun_xy"
+    - "NM31_orc1b2/NM31_plot_data_2ndrun_xy"
+  left_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v2/pseudo_labels/combined_left_fork.bed"
+  right_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v2/pseudo_labels/combined_right_fork.bed"
+  ori_annotations_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v2/pseudo_labels/combined_origin.bed"
+  termination_annotations_bed:
+  xy_cache_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/cache/xy_data.pkl"
+  xy_cache_log_every: 500
+  xy_cache_chunk_size: 250
+  # Reuse the v2 preprocessed chunks — same annotations, no need to redo
+  preprocessed_dataset_path: "CODEX/results/forte_v2/preprocessed_forte_v2.npz"
+  split_manifest: "CODEX/results/forte_v2/preprocessed_forte_v2.split_manifest.tsv"
+
+preprocessing:
+  use_rectangular_blocks: true
+  signal_mode: "wavelet"
+  smooth_sigma: 2
+  local_window: 50
+  wavelet: "db4"
+  wavelet_level: 2
+  percentile: 100
+  oversample_ratio: 0.5
+  encode_chunk_size: 1000
+  flip_augment: true   # NOW IMPLEMENTED — see training.py
+
+labeling:
+  trusted_negative_margin_bp: 0
+  termination_min_len_bp: 1
+
+model:
+  n_classes: 4
+  n_channels: 9
+  cnn_filters: 64
+  lstm_units: 128
+  dropout_rate: 0.3
+
+training:
+  epochs: 150
+  batch_size: 16
+  learning_rate: 0.0005
+  val_fraction: 0.2
+  test_fraction: 0.0
+  random_seed: 42
+  loss:
+    # Raised left_fork weight 2.0→2.5 to match origin, counteract directional bias
+    alpha: [1.0, 2.5, 2.0, 2.5]
+    gamma: 2.0
+  early_stopping:
+    monitor: "val_masked_f1_macro"
+    patience: 25
+    mode: "max"
+    restore_best_weights: true
+    enabled: true
+  reduce_lr:
+    monitor: "val_masked_f1_macro"
+    patience: 10
+    factor: 0.5
+    min_lr: 0.00001
+    mode: "max"
+    enabled: true
+  checkpoint:
+    monitor: "val_masked_f1_macro"
+    save_best_only: true
+    mode: "max"
+    enabled: true
+
+evaluation:
+  active_event_types: ["left_fork", "right_fork", "origin"]
+  probability_thresholds: [0.3, 0.35, 0.4, 0.45, 0.5, 0.6]
+  iou_thresholds: [0.2, 0.3, 0.4, 0.5, 0.6]
+  min_windows: 1
+  max_gap: 5000
+
+reannotation:
+  probability_thresholds:
+    left_fork: 0.4
+    right_fork: 0.4
+    origin: 0.4
+  min_windows: 1
+  max_gap: 5000
+
+output:
+  model_dir: "CODEX/models"
+  model_filename: "forte_v4.keras"
+  results_dir: "CODEX/results/forte_v4"

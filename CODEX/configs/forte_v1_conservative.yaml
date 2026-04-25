@@ -1,0 +1,105 @@
+experiment_name: "forte_v1_conservative"
+
+# FORTE v1 Conservative — real ORIs only, ORI-validated pseudo-forks (thresh 0.50)
+#
+# vs FORTE v1:
+#   - ori_annotations_bed = real ORIs only (21,334) — NO pseudo-ORIs
+#   - Forks = real + ORI-validated pseudo (anchored to real ORIs, thresh 0.50)
+#     same combined_left/right_fork.bed as forte_v1
+#
+# Purpose: isolate the effect of pseudo-ORIs (compare conservative vs v1 to see
+#          whether adding 20,668 pseudo-ORIs helps or adds noise)
+#
+# Annotation counts:
+#   left_forks:  3,129  (real 2,133 + ORI-validated pseudo 996)
+#   right_forks: 2,681  (real 1,944 + ORI-validated pseudo 737)
+#   origins:    21,334  (real only)
+
+data:
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40"
+  run_dirs:
+    - "NM30_Col0/NM30_plot_data_1strun_xy"
+    - "NM30_Col0/NM30_plot_data_2ndrun_xy"
+    - "NM31_orc1b2/NM31_plot_data_1strun_xy"
+    - "NM31_orc1b2/NM31_plot_data_2ndrun_xy"
+  left_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v1/pseudo_labels/combined_left_fork.bed"
+  right_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v1/pseudo_labels/combined_right_fork.bed"
+  ori_annotations_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/data/case_study_jan2026/combined/annotations/ORIs_combined_cleaned.bed"
+  termination_annotations_bed:
+  xy_cache_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/cache/xy_data.pkl"
+  xy_cache_log_every: 500
+  xy_cache_chunk_size: 250
+  preprocessed_dataset_path: "CODEX/results/forte_v1_conservative/preprocessed_forte_v1_conservative.npz"
+  split_manifest: "CODEX/results/forte_v1_conservative/preprocessed_forte_v1_conservative.split_manifest.tsv"
+
+preprocessing:
+  use_rectangular_blocks: true
+  signal_mode: "wavelet"
+  smooth_sigma: 2
+  local_window: 50
+  wavelet: "db4"
+  wavelet_level: 2
+  percentile: 100
+  oversample_ratio: 0.5
+  encode_chunk_size: 1000
+  flip_augment: true   # reverse signal + swap left_fork↔right_fork for fork-containing reads
+
+labeling:
+  trusted_negative_margin_bp: 0   # fully supervised — no masking buffer
+  termination_min_len_bp: 1
+
+model:
+  n_classes: 4
+  n_channels: 9
+  cnn_filters: 64
+  lstm_units: 128
+  dropout_rate: 0.3
+
+training:
+  epochs: 150
+  batch_size: 16
+  learning_rate: 0.0005
+  val_fraction: 0.2
+  test_fraction: 0.0
+  random_seed: 42
+  loss:
+    alpha: [1.0, 2.0, 2.0, 2.5]
+    gamma: 2.0
+  early_stopping:
+    monitor: "val_masked_f1_macro"
+    patience: 25
+    mode: "max"
+    restore_best_weights: true
+    enabled: true
+  reduce_lr:
+    monitor: "val_masked_f1_macro"
+    patience: 10
+    factor: 0.5
+    min_lr: 0.00001
+    mode: "max"
+    enabled: true
+  checkpoint:
+    monitor: "val_masked_f1_macro"
+    save_best_only: true
+    mode: "max"
+    enabled: true
+
+evaluation:
+  active_event_types: ["left_fork", "right_fork", "origin"]
+  probability_thresholds: [0.3, 0.35, 0.4, 0.45, 0.5, 0.6]
+  iou_thresholds: [0.2, 0.3, 0.4, 0.5, 0.6]
+  min_windows: 1
+  max_gap: 5000
+
+reannotation:
+  probability_thresholds:
+    left_fork: 0.4
+    right_fork: 0.4
+    origin: 0.4
+  min_windows: 1
+  max_gap: 5000
+
+output:
+  model_dir: "CODEX/models"
+  model_filename: "forte_v1_conservative.keras"
+  results_dir: "CODEX/results/forte_v1_conservative"

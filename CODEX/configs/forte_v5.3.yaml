@@ -1,0 +1,117 @@
+experiment_name: "forte_v5.3"
+
+# FORTE v5.3 — recall-weighted monitor
+#
+# Key change vs v5.2:
+#   monitor: val_event_rec_weighted  (was val_event_f1_ori_lf_rf)
+#
+#   val_event_rec_weighted = 0.5*rec_ori + 0.25*iou_lf + 0.25*iou_rf
+#
+#   Rationale: v5.2 had ORI recall=0.82 on val but the saved epoch (25) was
+#   chosen by composite F1, not recall. Epoch 33 had recall=0.844 but was
+#   discarded. This monitor directly saves the epoch with the best ORI recall,
+#   while keeping forks honest via IoU (boundary quality), not F1.
+#
+# Everything else identical to v5.2 (same labels, architecture, oversampling).
+# Uses preprocessed tensors from v5.2 — no re-encoding needed.
+
+data:
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40"
+  run_dirs:
+    - "NM30_Col0/NM30_plot_data_1strun_xy"
+    - "NM30_Col0/NM30_plot_data_2ndrun_xy"
+    - "NM31_orc1b2/NM31_plot_data_1strun_xy"
+    - "NM31_orc1b2/NM31_plot_data_2ndrun_xy"
+  left_forks_bed:  "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/combined_left_fork_clean.bed"
+  right_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/combined_right_fork_clean.bed"
+  ori_annotations_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/human_origin_clean.bed"
+  termination_annotations_bed:
+  xy_cache_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/cache/xy_data.pkl"
+  preprocessed_dataset_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.2/preprocessed_forte_v5.2.npz"
+  split_manifest: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/split_manifest.tsv"
+
+preprocessing:
+  use_rectangular_blocks: true
+  signal_mode: "wavelet"
+  smooth_sigma: 2
+  local_window: 50
+  wavelet: "db4"
+  wavelet_level: 2
+  percentile: 100
+  oversample_ratio: 0.5
+  small_ori_oversample_ratio: 2.0
+  small_ori_max_bp: 2000
+  encode_chunk_size: 1000
+  flip_augment: true
+
+labeling:
+  trusted_negative_margin_bp: 0
+  termination_min_len_bp: 1
+
+model:
+  n_classes: 4
+  n_channels: 9
+  cnn_filters: 64
+  lstm_units: 128
+  dropout_rate: 0.3863
+
+training:
+  epochs: 150
+  batch_size: 64
+  learning_rate: 0.002449
+  clipnorm: 1.0
+  val_fraction: 0.2
+  test_fraction: 0.1
+  random_seed: 42
+  lr_warmup:
+    enabled: true
+    epochs: 5
+    start_fraction: 0.1
+  loss:
+    alpha: [1.0, 2.2, 2.2, 5.0]
+    gamma: 2.087
+  event_iou:
+    enabled: true
+    prob_threshold: 0.4
+    max_gap_windows: 5
+    compute_every: 1
+  early_stopping:
+    monitor: "val_event_rec_weighted"   # 0.5*rec_ori + 0.25*iou_lf + 0.25*iou_rf
+    patience: 25
+    mode: "max"
+    restore_best_weights: true
+    enabled: true
+  reduce_lr:
+    monitor: "val_event_rec_weighted"
+    patience: 10
+    factor: 0.5
+    min_lr: 0.00001
+    mode: "max"
+    enabled: true
+  checkpoint:
+    monitor: "val_event_rec_weighted"
+    save_best_only: true
+    mode: "max"
+    enabled: true
+
+evaluation:
+  active_event_types: ["left_fork", "right_fork", "origin"]
+  probability_thresholds: [0.3, 0.35, 0.4, 0.45, 0.5, 0.6]
+  iou_thresholds: [0.2, 0.3, 0.4, 0.5, 0.6]
+  min_windows: 1
+  max_gap: 5000
+
+reannotation:
+  probability_thresholds:
+    left_fork: 0.3
+    right_fork: 0.3
+    origin: 0.3
+  min_windows: 1
+  max_gap: 5000           # default for all classes
+  max_gap_per_class:      # overrides max_gap per class
+    origin: 500           # ORIs: short gap only — don't bridge separate peaks (sweep: 500bp optimal)
+
+output:
+  model_dir: "CODEX/models"
+  model_filename: "forte_v5.3.keras"
+  results_dir: "CODEX/results/forte_v5.3"

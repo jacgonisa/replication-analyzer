@@ -1,0 +1,127 @@
+experiment_name: "forte_v5.0_onlyhuman"
+
+# FORTE v5.0-onlyhuman — high-quality human labels only
+#
+# Training set: 15,339 reads with at least one human-curated annotation
+#   (intersection with total pool of 44,798 reads with BrdU signal >30 kb)
+# All three label sources are from Nerea's direct visual annotations.
+#
+# Motivation:
+#   Pseudo-labels are noisy by construction. By restricting to expert-curated
+#   reads we reduce label noise at the cost of dataset size. The hypothesis is
+#   that higher-quality labels lead to better recall and spatial accuracy (IoU)
+#   on human-annotated events, even if fork detection generalises less well to
+#   unlabelled reads.
+#
+# Label coverage on human-annotated reads:
+#   LF:  2,133 labels on ~1,806 reads  (sparse — most reads only have ORI labels)
+#   RF:  1,944 labels on ~1,723 reads
+#   ORI: 21,334 labels on ~14,637 reads
+#
+# Primary metrics to watch: recall and event_iou (per class)
+#   Precision will be lower because human labels are incomplete — a "false positive"
+#   may well be a real event that was simply not annotated.
+#
+# Generate labels and split manifest first:
+#   bash CODEX/scripts/prepare_onlyhuman_labels.sh
+#
+# Split: 70/20/10 (train/val/test), stratified by annotation presence.
+#   Split manifest is pre-generated and frozen — only human reads are included.
+
+data:
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40"
+  run_dirs:
+    - "NM30_Col0/NM30_plot_data_1strun_xy"
+    - "NM30_Col0/NM30_plot_data_2ndrun_xy"
+    - "NM31_orc1b2/NM31_plot_data_1strun_xy"
+    - "NM31_orc1b2/NM31_plot_data_2ndrun_xy"
+  left_forks_bed:  "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.0_onlyhuman/training_labels/human_left_fork_clean.bed"
+  right_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.0_onlyhuman/training_labels/human_right_fork_clean.bed"
+  ori_annotations_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.0_onlyhuman/training_labels/human_origin_clean.bed"
+  termination_annotations_bed:
+  xy_cache_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/cache/xy_data.pkl"
+  xy_cache_log_every: 500
+  xy_cache_chunk_size: 250
+  # No preprocessed .npz — must encode from XY cache (different read set + labels)
+  preprocessed_dataset_path:
+  # Pre-generated manifest restricts training to 15,339 human-annotated reads
+  split_manifest: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.0_onlyhuman/split_manifest.tsv"
+
+preprocessing:
+  use_rectangular_blocks: true
+  signal_mode: "wavelet"
+  smooth_sigma: 2
+  local_window: 50
+  wavelet: "db4"
+  wavelet_level: 2
+  percentile: 100
+  oversample_ratio: 0.5
+  encode_chunk_size: 1000
+  flip_augment: true
+
+labeling:
+  trusted_negative_margin_bp: 0
+  termination_min_len_bp: 1
+
+model:
+  n_classes: 4
+  n_channels: 9
+  cnn_filters: 64        # HP-tuned (same as v5.0)
+  lstm_units: 128
+  dropout_rate: 0.3863   # HP-tuned (same as v5.0)
+
+training:
+  epochs: 150
+  batch_size: 32         # smaller dataset → smaller batch to keep gradient updates frequent
+  learning_rate: 0.002449  # HP-tuned (same as v5.0, may want to sweep)
+  clipnorm: 1.0
+  val_fraction: 0.2      # not used — split_manifest is pre-generated
+  test_fraction: 0.1     # not used — split_manifest is pre-generated
+  random_seed: 42
+  loss:
+    alpha: [1.0, 3.0, 3.0, 5.0]   # higher fork weight (sparse labels, ~1,800 reads each)
+                                    # higher ORI weight (21k labels but competing with sparse forks)
+    gamma: 2.087  # HP-tuned (same as v5.0)
+  event_iou:
+    enabled: true
+    prob_threshold: 0.4
+    max_gap_windows: 5
+    compute_every: 1
+  early_stopping:
+    monitor: "val_event_iou"       # mean of LF + RF + ORI IoU
+    patience: 30                   # more patience — smaller dataset, noisier per-epoch IoU
+    mode: "max"
+    restore_best_weights: true
+    enabled: true
+  reduce_lr:
+    monitor: "val_event_iou"
+    patience: 12
+    factor: 0.5
+    min_lr: 0.000005
+    mode: "max"
+    enabled: true
+  checkpoint:
+    monitor: "val_event_iou"
+    save_best_only: true
+    mode: "max"
+    enabled: true
+
+evaluation:
+  active_event_types: ["left_fork", "right_fork", "origin"]
+  probability_thresholds: [0.3, 0.35, 0.4, 0.45, 0.5, 0.6]
+  iou_thresholds: [0.2, 0.3, 0.4, 0.5, 0.6]
+  min_windows: 1
+  max_gap: 5000
+
+reannotation:
+  probability_thresholds:
+    left_fork: 0.4
+    right_fork: 0.4
+    origin: 0.4
+  min_windows: 1
+  max_gap: 5000
+
+output:
+  model_dir: "CODEX/models"
+  model_filename: "forte_v5.0_onlyhuman.keras"
+  results_dir: "CODEX/results/forte_v5.0_onlyhuman"

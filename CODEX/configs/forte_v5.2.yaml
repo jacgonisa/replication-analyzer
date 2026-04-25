@@ -1,0 +1,119 @@
+experiment_name: "forte_v5.2"
+
+# FORTE v5.2 — small ORI oversampling + LR warmup
+#
+# Key changes vs v5.1:
+#   1. small_ori_oversample_ratio: 2.0
+#        Reads with ORIs ≤ 2kb are oversampled an extra 2× on top of the existing
+#        oversample_ratio=0.5 pass. Diagnosis: 72% of 500-1kb ORIs have some AI
+#        overlap but IoU is low — model detects the region but draws boundaries too
+#        coarsely. Root cause: too few small-ORI gradient updates relative to large
+#        ORIs and background. Fix: more small-ORI reads per epoch.
+#   2. lr_warmup: 5-epoch linear ramp from 10% of LR → full LR
+#        v5.1 showed large early spikes. LR 0.002449 (HP-tuned for v5.0 pseudo-ORI
+#        label distribution) is too aggressive at epoch 0 for the new label geometry.
+#
+# Labels: identical to v5.1 (human ORI + pseudo forks). Reuses split manifest.
+# No preprocessed_dataset_path — must encode from XY cache (same as v5.1).
+
+data:
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40"
+  run_dirs:
+    - "NM30_Col0/NM30_plot_data_1strun_xy"
+    - "NM30_Col0/NM30_plot_data_2ndrun_xy"
+    - "NM31_orc1b2/NM31_plot_data_1strun_xy"
+    - "NM31_orc1b2/NM31_plot_data_2ndrun_xy"
+  left_forks_bed:  "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/combined_left_fork_clean.bed"
+  right_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/combined_right_fork_clean.bed"
+  ori_annotations_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/human_origin_clean.bed"
+  termination_annotations_bed:
+  xy_cache_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/cache/xy_data.pkl"
+  xy_cache_log_every: 500
+  xy_cache_chunk_size: 250
+  preprocessed_dataset_path:
+  save_preprocessed_dataset_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.2/preprocessed_forte_v5.2.npz"
+  split_manifest: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/split_manifest.tsv"
+
+preprocessing:
+  use_rectangular_blocks: true
+  signal_mode: "wavelet"
+  smooth_sigma: 2
+  local_window: 50
+  wavelet: "db4"
+  wavelet_level: 2
+  percentile: 100
+  oversample_ratio: 0.5             # general event-read oversampling (unchanged)
+  small_ori_oversample_ratio: 2.0   # extra 2× for reads with ORIs ≤ small_ori_max_bp
+  small_ori_max_bp: 2000            # threshold for "small ORI" reads
+  encode_chunk_size: 1000
+  flip_augment: true
+
+labeling:
+  trusted_negative_margin_bp: 0
+  termination_min_len_bp: 1
+
+model:
+  n_classes: 4
+  n_channels: 9
+  cnn_filters: 64        # HP-tuned (same as v5.0/v5.1)
+  lstm_units: 128
+  dropout_rate: 0.3863   # HP-tuned (same as v5.0/v5.1)
+
+training:
+  epochs: 150
+  batch_size: 64         # HP-tuned (same as v5.0/v5.1)
+  learning_rate: 0.002449  # HP-tuned (same as v5.0/v5.1) — full LR after warmup
+  clipnorm: 1.0
+  val_fraction: 0.2
+  test_fraction: 0.1
+  random_seed: 42
+  lr_warmup:
+    enabled: true
+    epochs: 5             # ramp over first 5 epochs
+    start_fraction: 0.1   # start at 10% of learning_rate = 0.000245
+  loss:
+    alpha: [1.0, 2.2, 2.2, 5.0]   # same as v5.1
+    gamma: 2.087
+  event_iou:
+    enabled: true
+    prob_threshold: 0.4
+    max_gap_windows: 5
+    compute_every: 1
+  early_stopping:
+    monitor: "val_event_f1_ori_lf_rf"
+    patience: 25
+    mode: "max"
+    restore_best_weights: true
+    enabled: true
+  reduce_lr:
+    monitor: "val_event_f1_ori_lf_rf"
+    patience: 10
+    factor: 0.5
+    min_lr: 0.00001
+    mode: "max"
+    enabled: true
+  checkpoint:
+    monitor: "val_event_f1_ori_lf_rf"
+    save_best_only: true
+    mode: "max"
+    enabled: true
+
+evaluation:
+  active_event_types: ["left_fork", "right_fork", "origin"]
+  probability_thresholds: [0.3, 0.35, 0.4, 0.45, 0.5, 0.6]
+  iou_thresholds: [0.2, 0.3, 0.4, 0.5, 0.6]
+  min_windows: 1
+  max_gap: 5000
+
+reannotation:
+  probability_thresholds:
+    left_fork: 0.3
+    right_fork: 0.3
+    origin: 0.3
+  min_windows: 1
+  max_gap: 5000
+
+output:
+  model_dir: "CODEX/models"
+  model_filename: "forte_v5.2.keras"
+  results_dir: "CODEX/results/forte_v5.2"

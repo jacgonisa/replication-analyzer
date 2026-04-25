@@ -1,0 +1,126 @@
+experiment_name: "forte_v5.1"
+
+# FORTE v5.1 — human ORI labels
+#
+# Key change vs v5.0:
+#   ORI training labels = Nerea's human annotations (ORIs_combined_cleaned.bed)
+#   Fork training labels = v5.0 pseudo labels (unchanged)
+#
+# Why: v5.0 ORIs were pseudo-labels — the model was trained on what FORTE v4.3
+#   predicted as "region between two converging forks". That creates a circular
+#   dependency: if v4.3 missed a large ORI (or called bad forks there), v5.0
+#   never saw it as an ORI training example.
+#   Nerea's human labels were annotated directly from BrdU signal, independent
+#   of fork detection, and include large ORIs that pseudo-labeling missed.
+#
+# Fork labels stay as pseudo (human fork labels cover ~1,800 reads — too sparse
+#   to train reliable fork detection on their own).
+#
+# Changes from v5.0:
+#   - ori_annotations_bed: human_origin_clean.bed  (was flanked_origin_clean.bed)
+#   - loss alpha ORI weight: 5.0 → 5.0             (was 4.0 — increased for sparser labels)
+#   - No preprocessed dataset (must retrain from XY cache)
+#
+# Generate labels first:
+#   bash CODEX/scripts/prepare_v5.1_labels.sh
+#
+# Annotation counts (after cleaning — approximate, filled in after label prep):
+#   left_forks:  20,249   (reused from v5.0)
+#   right_forks: 20,760   (reused from v5.0)
+#   origins:     ~21,000  (Nerea human ORIs, fork regions subtracted)
+
+data:
+  base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40"
+  run_dirs:
+    - "NM30_Col0/NM30_plot_data_1strun_xy"
+    - "NM30_Col0/NM30_plot_data_2ndrun_xy"
+    - "NM31_orc1b2/NM31_plot_data_1strun_xy"
+    - "NM31_orc1b2/NM31_plot_data_2ndrun_xy"
+  left_forks_bed:  "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/combined_left_fork_clean.bed"
+  right_forks_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/combined_right_fork_clean.bed"
+  ori_annotations_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/human_origin_clean.bed"
+  termination_annotations_bed:
+  xy_cache_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/cache/xy_data.pkl"
+  xy_cache_log_every: 500
+  xy_cache_chunk_size: 250
+  # No preprocessed_dataset_path — must encode from XY cache (ORI labels changed)
+  preprocessed_dataset_path:
+  split_manifest: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/split_manifest.tsv"
+
+preprocessing:
+  use_rectangular_blocks: true
+  signal_mode: "wavelet"
+  smooth_sigma: 2
+  local_window: 50
+  wavelet: "db4"
+  wavelet_level: 2
+  percentile: 100
+  oversample_ratio: 0.5
+  encode_chunk_size: 1000
+  flip_augment: true
+
+labeling:
+  trusted_negative_margin_bp: 0
+  termination_min_len_bp: 1
+
+model:
+  n_classes: 4
+  n_channels: 9
+  cnn_filters: 64        # HP-tuned (same as v5.0)
+  lstm_units: 128
+  dropout_rate: 0.3863   # HP-tuned (same as v5.0)
+
+training:
+  epochs: 150
+  batch_size: 64         # HP-tuned (same as v5.0)
+  learning_rate: 0.002449  # HP-tuned (same as v5.0)
+  clipnorm: 1.0
+  val_fraction: 0.2
+  test_fraction: 0.1
+  random_seed: 42
+  loss:
+    alpha: [1.0, 2.2, 2.2, 5.0]   # ORI weight 4.0→5.0: fewer labels, harder class
+    gamma: 2.087  # HP-tuned (same as v5.0)
+  event_iou:
+    enabled: true
+    prob_threshold: 0.4
+    max_gap_windows: 5
+    compute_every: 1
+  early_stopping:
+    monitor: "val_event_f1_ori_lf_rf"   # 0.5*F1_ori + 0.25*F1_lf + 0.25*F1_rf
+    patience: 25                          # ORI labels reliable → precision counts
+    mode: "max"
+    restore_best_weights: true
+    enabled: true
+  reduce_lr:
+    monitor: "val_event_f1_ori_lf_rf"
+    patience: 10
+    factor: 0.5
+    min_lr: 0.00001
+    mode: "max"
+    enabled: true
+  checkpoint:
+    monitor: "val_event_f1_ori_lf_rf"
+    save_best_only: true
+    mode: "max"
+    enabled: true
+
+evaluation:
+  active_event_types: ["left_fork", "right_fork", "origin"]
+  probability_thresholds: [0.3, 0.35, 0.4, 0.45, 0.5, 0.6]
+  iou_thresholds: [0.2, 0.3, 0.4, 0.5, 0.6]
+  min_windows: 1
+  max_gap: 5000
+
+reannotation:
+  probability_thresholds:
+    left_fork: 0.3    # recall-first; fork IoU=0.81 at 0.3 vs 0.84 at 0.5 — small gain not worth recall drop
+    right_fork: 0.3   # same threshold for all classes for consistency
+    origin: 0.3       # max recall (0.60 at prob=0.3, best achievable)
+  min_windows: 1
+  max_gap: 5000
+
+output:
+  model_dir: "CODEX/models"
+  model_filename: "forte_v5.1.keras"
+  results_dir: "CODEX/results/forte_v5.1"
