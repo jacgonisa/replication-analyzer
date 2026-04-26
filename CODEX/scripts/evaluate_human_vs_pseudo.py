@@ -196,10 +196,12 @@ def main():
         print(f"  {name}: {len(df):,} total → {len(h):,} human + {len(p):,} pseudo")
 
     # ── Evaluation settings ───────────────────────────────────────────────────
-    prob_thresholds = config["evaluation"].get("probability_thresholds", [0.3, 0.4, 0.5])
-    iou_thresholds  = config["evaluation"].get("iou_thresholds",         [0.2, 0.3, 0.5])
-    min_windows     = config["evaluation"].get("min_windows", 1)
-    max_gap         = config["evaluation"].get("max_gap", 5000)
+    prob_thresholds  = config["evaluation"].get("probability_thresholds", [0.3, 0.4, 0.5])
+    iou_thresholds   = config["evaluation"].get("iou_thresholds",         [0.2, 0.3, 0.5])
+    min_windows      = config["evaluation"].get("min_windows", 1)
+    max_gap          = config["evaluation"].get("max_gap", 5000)
+    max_gap_per_class = config["evaluation"].get("max_gap_per_class",
+                        config.get("reannotation", {}).get("max_gap_per_class", {}))
     active_ids      = resolve_active_class_ids(
         event_types=config.get("evaluation", {}).get("active_event_types"),
         n_classes=config["model"].get("n_classes", 4),
@@ -221,6 +223,7 @@ def main():
             iou_thresholds=iou_thresholds,
             min_windows=min_windows,
             max_gap=max_gap,
+            max_gap_per_class=max_gap_per_class,
             active_class_ids=active_ids,
         )
         sweep["gt_subset"] = label

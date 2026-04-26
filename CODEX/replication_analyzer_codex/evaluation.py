@@ -306,20 +306,25 @@ def run_threshold_sweep(
     iou_thresholds: List[float],
     min_windows: int,
     max_gap: int,
+    max_gap_per_class: dict | None = None,
     active_class_ids: List[int] | None = None,
 ) -> pd.DataFrame:
     """Grid search over class probability thresholds and event IoU thresholds."""
     if active_class_ids is None:
         active_class_ids = EVENT_CLASS_IDS
+    if max_gap_per_class is None:
+        max_gap_per_class = {}
     rows = []
     for class_id in active_class_ids:
+        class_name = CLASS_ID_TO_NAME[class_id]
+        effective_max_gap = max_gap_per_class.get(class_name, max_gap)
         for prob_threshold in probability_thresholds:
             pred_events = windows_to_events(
                 predictions=predictions,
                 class_id=class_id,
                 prob_threshold=prob_threshold,
                 min_windows=min_windows,
-                max_gap=max_gap,
+                max_gap=effective_max_gap,
             )
             for iou_threshold in iou_thresholds:
                 metrics = evaluate_event_predictions(
