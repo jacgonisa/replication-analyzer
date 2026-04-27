@@ -151,7 +151,7 @@ def encode_signal_rectangular_wavelet(signal: np.ndarray,
     CRITICAL: Input signal is already expanded rectangular step-function.
     Wavelet decomposition will capture sharp transitions at block boundaries.
 
-    Creates 9 channels:
+    Creates 11 channels:
     1. Normalized signal
     2. Wavelet approximation (low-freq)
     3. Wavelet detail 1 (high-freq - captures step edges)
@@ -161,6 +161,8 @@ def encode_signal_rectangular_wavelet(signal: np.ndarray,
     7. Z-score
     8. Cumulative sum
     9. Envelope
+    10. Local slope  (gradient of smoothed signal — positive=rising, negative=falling)
+    11. Read-level mean BrdU  (constant per read — distinguishes null-BrdU reads)
 
     Parameters
     ----------
@@ -230,6 +232,16 @@ def encode_signal_rectangular_wavelet(signal: np.ndarray,
     env_min = minimum_filter1d(norm_signal, size=min(20, n//3), mode='nearest')
     envelope = (env_max - env_min) / 2
 
+    # Local slope: gradient of heavily smoothed signal — captures rising/falling trend
+    # Positive = signal rises left→right (right fork), negative = falls (left fork), ~0 = ORI/background
+    slope_sigma = max(smooth_sigma * 3, 5)
+    smoothed_for_slope = gaussian_filter1d(signal, sigma=slope_sigma)
+    local_slope_raw = np.gradient(smoothed_for_slope)
+    local_slope = local_slope_raw / (np.std(local_slope_raw) + 1e-8)
+
+    # Read-level mean BrdU: constant per read, distinguishes null-BrdU reads (≈0) from normal (0.3-0.8)
+    read_mean_brdu = np.full(n, mean, dtype=np.float32)  # 'mean' = signal.mean(), already computed
+
     # Combine into multi-channel feature map
     X = np.stack([
         norm_signal,
@@ -240,7 +252,9 @@ def encode_signal_rectangular_wavelet(signal: np.ndarray,
         local_std,
         z_score,
         cumsum,
-        envelope
+        envelope,
+        local_slope,
+        read_mean_brdu,
     ], axis=1)
 
     return X.astype(np.float32)

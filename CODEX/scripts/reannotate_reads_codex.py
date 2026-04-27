@@ -103,6 +103,17 @@ def main():
     else:
         combined_events = pd.DataFrame()
 
+    # Slope filter: suppress fork events with |brdu_slope| below threshold.
+    # Flat forks (slope ≈ 0) are likely null-BrdU ORI reads misclassified as forks.
+    min_fork_slope = config["reannotation"].get("min_fork_slope", None)
+    if min_fork_slope is not None and len(combined_events) > 0 and "brdu_slope" in combined_events.columns:
+        fork_mask = combined_events["event_type"].isin(["left_fork", "right_fork"])
+        flat_mask = fork_mask & (combined_events["brdu_slope"].abs() < min_fork_slope)
+        n_removed = flat_mask.sum()
+        if n_removed > 0:
+            combined_events = combined_events[~flat_mask].reset_index(drop=True)
+            print(f"Slope filter: removed {n_removed:,} flat fork events (|brdu_slope| < {min_fork_slope})")
+
     if args.calibrators and len(combined_events) > 0:
         calibrators = load_calibrators(args.calibrators)
         combined_events = apply_calibrators(combined_events, calibrators)

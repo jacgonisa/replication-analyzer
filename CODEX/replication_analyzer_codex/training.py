@@ -37,6 +37,8 @@ def _sample_partition_read_ids(
     small_ori_oversample_ratio: float = 0.0,
     large_ori_read_ids: List[str] | None = None,
     large_ori_oversample_ratio: float = 0.0,
+    null_brdu_ori_read_ids: List[str] | None = None,
+    null_brdu_ori_oversample_ratio: float = 0.0,
 ) -> List[str]:
     read_ids = partition_manifest["read_id"].tolist()
     if split_name != "train":
@@ -73,6 +75,17 @@ def _sample_partition_read_ids(
             sampled.extend(rng.choice(large_in_split, size=n_extra_large, replace=True).tolist())
             print(f"  Large ORI oversampling: +{n_extra_large} copies from {len(large_in_split)} reads "
                   f"(ratio={large_ori_oversample_ratio})")
+
+    # Null-BrdU ORI reads (ORI annotations, no forks, flat near-zero signal).
+    # These look like RF to the model without extra exposure.
+    if null_brdu_ori_read_ids and null_brdu_ori_oversample_ratio > 0:
+        split_ids = set(partition_manifest["read_id"])
+        null_in_split = [r for r in null_brdu_ori_read_ids if r in split_ids]
+        if null_in_split:
+            n_extra_null = int(len(null_in_split) * null_brdu_ori_oversample_ratio)
+            sampled.extend(rng.choice(null_in_split, size=n_extra_null, replace=True).tolist())
+            print(f"  Null-BrdU ORI oversampling: +{n_extra_null} copies from {len(null_in_split)} reads "
+                  f"(ratio={null_brdu_ori_oversample_ratio})")
 
     if background_ids:
         target_background = min(len(background_ids), max(len(sampled), 1))
@@ -119,6 +132,7 @@ def prepare_partition_data(
     random_seed: int,
     small_ori_read_ids: List[str] | None = None,
     large_ori_read_ids: List[str] | None = None,
+    null_brdu_ori_read_ids: List[str] | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int, pd.DataFrame]:
     """Prepare one split using weak labels and shared representation logic."""
     partition_manifest = manifest[manifest["split"] == split_name].copy()
@@ -137,6 +151,8 @@ def prepare_partition_data(
         small_ori_oversample_ratio=preprocessing_config.get("small_ori_oversample_ratio", 0.0),
         large_ori_read_ids=large_ori_read_ids,
         large_ori_oversample_ratio=preprocessing_config.get("large_ori_oversample_ratio", 0.0),
+        null_brdu_ori_read_ids=null_brdu_ori_read_ids,
+        null_brdu_ori_oversample_ratio=preprocessing_config.get("null_brdu_ori_oversample_ratio", 0.0),
     )
     print(f"Reads processed after sampling policy: {len(sampled_read_ids):,}")
 
@@ -262,11 +278,12 @@ def train_weak5_model(config: dict):
         print(f"  Created new split manifest: {manifest_path}")
     print(manifest["split"].value_counts().to_string())
 
-    # Identify reads with small and large ORIs for targeted oversampling
+    # Identify reads for targeted oversampling
     small_ori_max_bp = config["preprocessing"].get("small_ori_max_bp", 2000)
     large_ori_min_bp = config["preprocessing"].get("large_ori_min_bp", 20000)
     small_ori_reads: List[str] = []
     large_ori_reads: List[str] = []
+    null_brdu_ori_reads: List[str] = []
     if len(origins) > 0:
         ori_lens = origins["end"] - origins["start"]
         if config["preprocessing"].get("small_ori_oversample_ratio", 0.0) > 0:
@@ -277,6 +294,21 @@ def train_weak5_model(config: dict):
             large_ori_reads = list(origins.loc[ori_lens >= large_ori_min_bp, "read_id"].unique())
             print(f"  Large ORI reads (≥{large_ori_min_bp}bp): {len(large_ori_reads):,} "
                   f"(oversample ratio: {config['preprocessing']['large_ori_oversample_ratio']}×)")
+        if config["preprocessing"].get("null_brdu_ori_oversample_ratio", 0.0) > 0:
+            # Reads with ORI annotations, no fork annotations, and low mean BrdU signal.
+            # These look identical to RF without explicit oversampling.
+            null_brdu_max_mean = config["preprocessing"].get("null_brdu_ori_max_mean", 0.05)
+            ori_read_ids = set(origins["read_id"])
+            fork_read_ids = set(left_forks["read_id"]) | set(right_forks["read_id"])
+            ori_only_read_ids = ori_read_ids - fork_read_ids
+            read_means = xy_data.groupby("read_id")["signal"].mean()
+            null_brdu_ori_reads = [
+                r for r in ori_only_read_ids
+                if r in read_means.index and read_means[r] < null_brdu_max_mean
+            ]
+            print(f"  Null-BrdU ORI reads (no forks, mean BrdU < {null_brdu_max_mean}): "
+                  f"{len(null_brdu_ori_reads):,} "
+                  f"(oversample ratio: {config['preprocessing']['null_brdu_ori_oversample_ratio']}×)")
 
     print("\n[4/7] Preparing training tensors...")
     train_x, train_y, train_w, max_length, train_info = prepare_partition_data(
@@ -289,6 +321,7 @@ def train_weak5_model(config: dict):
         random_seed=config["training"].get("random_seed", 42),
         small_ori_read_ids=small_ori_reads,
         large_ori_read_ids=large_ori_reads,
+        null_brdu_ori_read_ids=null_brdu_ori_reads,
     )
     print("\n[5/7] Preparing validation tensors...")
     val_x, val_y, val_w, _, val_info = prepare_partition_data(
@@ -298,7 +331,8 @@ def train_weak5_model(config: dict):
         annotation_dict=annotation_dict,
         preprocessing_config={**config["preprocessing"], "oversample_ratio": 0.0,
                               "small_ori_oversample_ratio": 0.0,
-                              "large_ori_oversample_ratio": 0.0, "max_length": max_length},
+                              "large_ori_oversample_ratio": 0.0,
+                              "null_brdu_ori_oversample_ratio": 0.0, "max_length": max_length},
         labeling_config=config["labeling"],
         random_seed=config["training"].get("random_seed", 42),
     )
