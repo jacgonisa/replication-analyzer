@@ -144,7 +144,8 @@ def encode_signal_rectangular_wavelet(signal: np.ndarray,
                                       smooth_sigma: float = 2,
                                       window: int = 50,
                                       wavelet: str = 'db4',
-                                      level: int = 2) -> np.ndarray:
+                                      level: int = 2,
+                                      extra_channels: bool = False) -> np.ndarray:
     """
     Multi-channel encoding using WAVELET decomposition for RECTANGULAR BLOCK signal.
 
@@ -232,18 +233,7 @@ def encode_signal_rectangular_wavelet(signal: np.ndarray,
     env_min = minimum_filter1d(norm_signal, size=min(20, n//3), mode='nearest')
     envelope = (env_max - env_min) / 2
 
-    # Local slope: gradient of heavily smoothed signal — captures rising/falling trend
-    # Positive = signal rises left→right (right fork), negative = falls (left fork), ~0 = ORI/background
-    slope_sigma = max(smooth_sigma * 3, 5)
-    smoothed_for_slope = gaussian_filter1d(signal, sigma=slope_sigma)
-    local_slope_raw = np.gradient(smoothed_for_slope)
-    local_slope = local_slope_raw / (np.std(local_slope_raw) + 1e-8)
-
-    # Read-level mean BrdU: constant per read, distinguishes null-BrdU reads (≈0) from normal (0.3-0.8)
-    read_mean_brdu = np.full(n, mean, dtype=np.float32)  # 'mean' = signal.mean(), already computed
-
-    # Combine into multi-channel feature map
-    X = np.stack([
+    channels = [
         norm_signal,
         approx_upsampled,
         detail1_upsampled,
@@ -253,8 +243,22 @@ def encode_signal_rectangular_wavelet(signal: np.ndarray,
         z_score,
         cumsum,
         envelope,
-        local_slope,
-        read_mean_brdu,
-    ], axis=1)
+    ]
+
+    if extra_channels:
+        # Ch10: local slope — gradient of heavily smoothed signal
+        # Positive = rising left→right (RF), negative = falling (LF), ~0 = ORI/background
+        slope_sigma = max(smooth_sigma * 3, 5)
+        smoothed_for_slope = gaussian_filter1d(signal, sigma=slope_sigma)
+        local_slope_raw = np.gradient(smoothed_for_slope)
+        local_slope = local_slope_raw / (np.std(local_slope_raw) + 1e-8)
+
+        # Ch11: read-level mean BrdU — constant per read, ~0 on null-BrdU reads
+        read_mean_brdu = np.full(n, mean, dtype=np.float32)
+
+        channels += [local_slope, read_mean_brdu]
+
+    # Combine into multi-channel feature map
+    X = np.stack(channels, axis=1)
 
     return X.astype(np.float32)

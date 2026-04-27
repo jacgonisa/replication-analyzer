@@ -48,6 +48,7 @@ def encode_read_dataframe(read_df: pd.DataFrame, preprocessing_config: dict):
             window=local_window,
             wavelet=wavelet,
             level=wavelet_level,
+            extra_channels=preprocessing_config.get("extra_channels", False),
         )
 
     raw_signal = read_df["signal"].to_numpy()

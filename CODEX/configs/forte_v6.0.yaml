@@ -53,6 +53,7 @@ preprocessing:
   large_ori_min_bp: 20000
   null_brdu_ori_oversample_ratio: 3.0   # NEW: heavily oversample null-BrdU ORI reads
   null_brdu_ori_max_mean: 0.05          # NEW: reads with mean BrdU < 0.05 qualify
+  extra_channels: true                  # NEW: enable slope + read-level mean BrdU channels
   encode_chunk_size: 1000
   flip_augment: true
 
