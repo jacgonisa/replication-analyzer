@@ -40,20 +40,22 @@ ORI_MIN_PROB = 0.4  # minimum to appear in tiered BED (best-recall threshold)
 
 
 def export_bed(df: pd.DataFrame, out_path: Path) -> int:
+    """Export fork BED with brdu_slope as extra column."""
     bed = pd.DataFrame({
-        "chr":    df["chr"],
-        "start":  df["start"],
-        "end":    df["end"],
-        "name":   df["read_id"],
-        "score":  (df["mean_prob"] * 1000).astype(int).clip(0, 1000),
-        "strand": ".",
+        "chr":        df["chr"],
+        "start":      df["start"],
+        "end":        df["end"],
+        "name":       df["read_id"],
+        "score":      (df["mean_prob"] * 1000).astype(int).clip(0, 1000),
+        "strand":     ".",
+        "brdu_slope": df["brdu_slope"].round(8) if "brdu_slope" in df.columns else float("nan"),
     })
     bed.to_csv(out_path, sep="\t", header=False, index=False)
     return len(bed)
 
 
 def export_origin_tiered_bed(df: pd.DataFrame, out_path: Path) -> dict:
-    """Export all ORIs >= ORI_MIN_PROB with a confidence_tier column."""
+    """Export all ORIs >= ORI_MIN_PROB with confidence_tier and mean_brdu_signal."""
     sub = df[df["mean_prob"] >= ORI_MIN_PROB].copy()
 
     def assign_tier(prob):
@@ -64,13 +66,14 @@ def export_origin_tiered_bed(df: pd.DataFrame, out_path: Path) -> dict:
 
     sub["confidence_tier"] = sub["mean_prob"].apply(assign_tier)
     bed = pd.DataFrame({
-        "chr":             sub["chr"],
-        "start":           sub["start"],
-        "end":             sub["end"],
-        "name":            sub["read_id"],
-        "score":           (sub["mean_prob"] * 1000).astype(int).clip(0, 1000),
-        "strand":          ".",
-        "confidence_tier": sub["confidence_tier"],
+        "chr":              sub["chr"],
+        "start":            sub["start"],
+        "end":              sub["end"],
+        "name":             sub["read_id"],
+        "score":            (sub["mean_prob"] * 1000).astype(int).clip(0, 1000),
+        "strand":           ".",
+        "confidence_tier":  sub["confidence_tier"],
+        "mean_brdu_signal": sub["mean_brdu_signal"].round(6) if "mean_brdu_signal" in sub.columns else float("nan"),
     })
     bed.to_csv(out_path, sep="\t", header=False, index=False)
     counts = sub["confidence_tier"].value_counts().to_dict()
@@ -130,13 +133,14 @@ def main():
 Source: {args.events}
 
 ── FORK FILES ──────────────────────────────────────────────────────────────
-BED6 format (tab-separated, no header):
+BED7 format (tab-separated, no header):
   col1: chromosome
   col2: start (0-based, half-open)
   col3: end
   col4: read_id
   col5: score = mean_prob x 1000  (range 0-1000)
   col6: strand = '.' (events are on reads, not on reference strand)
+  col7: brdu_slope (BrdU/bp; positive = signal rises left->right = right fork pattern)
 
   {args.model_name}_left_fork_sensitive.bed   {counts[('left_fork',  'sensitive')]:>7,}  mean_prob >= {args.sensitive_threshold}
   {args.model_name}_left_fork_confident.bed   {counts[('left_fork',  'confident')]:>7,}  mean_prob >= {args.confident_threshold}
@@ -144,7 +148,7 @@ BED6 format (tab-separated, no header):
   {args.model_name}_right_fork_confident.bed  {counts[('right_fork', 'confident')]:>7,}  mean_prob >= {args.confident_threshold}
 
 ── ORIGIN FILE ─────────────────────────────────────────────────────────────
-BED7 format (tab-separated, no header):
+BED8 format (tab-separated, no header):
   col1: chromosome
   col2: start (0-based, half-open)
   col3: end
@@ -152,6 +156,7 @@ BED7 format (tab-separated, no header):
   col5: score = mean_prob x 1000  (range 0-1000)
   col6: strand = '.'
   col7: confidence_tier  (high | medium | lower)
+  col8: mean_brdu_signal (mean BrdU incorporation inside the ORI; low = null-BrdU type)
 
 Confidence tiers (based on threshold sweep — best recall at prob=0.4,
 best IoU/localisation at prob=0.6):

@@ -243,6 +243,17 @@ def main():
                 for row in match[0][2].itertuples(index=False):
                     ax_ev.axvspan(int(row.start), int(row.end), ymin=y0, ymax=y1,
                                   color=class_col, alpha=0.55)
+                    # annotate with signal stat
+                    mid = (int(row.start) + int(row.end)) / 2
+                    yc  = (y0 + y1) / 2
+                    if class_name == "origin" and hasattr(row, "mean_brdu_signal") and not np.isnan(row.mean_brdu_signal):
+                        ax_ev.text(mid, yc, f"BrdU={row.mean_brdu_signal:.3f}",
+                                   ha="center", va="center", fontsize=5.5,
+                                   color="white", fontweight="bold", clip_on=True)
+                    elif class_name in ("left_fork", "right_fork") and hasattr(row, "brdu_slope") and not np.isnan(row.brdu_slope):
+                        ax_ev.text(mid, yc, f"slope={row.brdu_slope:.2e}",
+                                   ha="center", va="center", fontsize=5.5,
+                                   color="white", fontweight="bold", clip_on=True)
 
         handles = [mpatches.Patch(color=COL_REAL_LEFT,  label="pred L"),
                    mpatches.Patch(color=COL_REAL_RIGHT, label="pred R"),
