@@ -98,6 +98,13 @@ def main():
     parser.add_argument("--max-gap-ori", type=int, default=None,
                         help="Override max-gap for origins only (default: same as --max-gap)")
     parser.add_argument("--output", required=True, help="Output PNG path")
+    parser.add_argument("--human-left-forks-bed",  default=None,
+                        help="Human-only left fork BED — shown as solid spans; "
+                             "remaining GT spans shown hatched (pseudo-labels)")
+    parser.add_argument("--human-right-forks-bed", default=None,
+                        help="Human-only right fork BED")
+    parser.add_argument("--human-ori-bed",          default=None,
+                        help="Human-only ORI BED")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -110,10 +117,16 @@ def main():
     xy = load_xy(config["data"]["base_dir"], config["data"]["run_dirs"], args.read_id)
     print(f"Loaded {len(xy)} windows for {args.read_id}")
 
-    # Load real annotations
+    # Load annotations — combined (pseudo+human) for GT bar
     left_real  = load_bed(config["data"].get("left_forks_bed"))
     right_real = load_bed(config["data"].get("right_forks_bed"))
     ori_real   = load_bed(config["data"].get("ori_annotations_bed"))
+
+    # Optional human-only annotation files for human/pseudo distinction
+    left_human  = load_bed(args.human_left_forks_bed)
+    right_human = load_bed(args.human_right_forks_bed)
+    ori_human   = load_bed(args.human_ori_bed)
+    show_human_pseudo = any([args.human_left_forks_bed, args.human_right_forks_bed, args.human_ori_bed])
 
     # Build per-model preprocessing configs
     model_configs = []
@@ -164,38 +177,78 @@ def main():
     x = xy["start"].to_numpy()
     y = xy["signal"].to_numpy()
 
+    def _is_human(df_human, read_id, start, end):
+        """True if interval overlaps any human annotation for this read."""
+        for row in df_human[df_human["read_id"] == read_id].itertuples(index=False):
+            if start < int(row.end) and end > int(row.start):
+                return True
+        return False
+
+    def add_spans_human_pseudo(ax, df_all, df_human, read_id, color, label_h, label_p, alpha=0.35):
+        """Draw solid spans for human annotations, hatched for pseudo-labels."""
+        subset = df_all[df_all["read_id"] == read_id]
+        used_h, used_p = False, False
+        for row in subset.itertuples(index=False):
+            human = _is_human(df_human, read_id, int(row.start), int(row.end))
+            lbl = (label_h if not used_h else None) if human else (label_p if not used_p else None)
+            hatch = None if human else "////"
+            ax.axvspan(int(row.start), int(row.end), color=color,
+                       alpha=alpha if human else alpha * 0.6,
+                       hatch=hatch, edgecolor=color if hatch else None, label=lbl)
+            if human: used_h = True
+            else:     used_p = True
+
     # Panel 0: BrdU signal + GT spans
     ax = axes[0]
     ax.step(x, y, where="post", color="black", linewidth=1.2, label="BrdU signal")
     ax.fill_between(x, y, step="post", alpha=0.12, color="gray")
-    add_spans(ax, left_real,  args.read_id, COL_REAL_LEFT,  "Real left fork")
-    add_spans(ax, right_real, args.read_id, COL_REAL_RIGHT, "Real right fork")
-    add_spans(ax, ori_real,   args.read_id, COL_REAL_ORI,   "Real ORI")
+    if show_human_pseudo:
+        add_spans_human_pseudo(ax, left_real,  left_human,  args.read_id, COL_REAL_LEFT,  "LF (human)", "LF (pseudo)")
+        add_spans_human_pseudo(ax, right_real, right_human, args.read_id, COL_REAL_RIGHT, "RF (human)", "RF (pseudo)")
+        add_spans_human_pseudo(ax, ori_real,   ori_human,   args.read_id, COL_REAL_ORI,   "ORI (human)", "ORI (pseudo)")
+    else:
+        add_spans(ax, left_real,  args.read_id, COL_REAL_LEFT,  "Real left fork")
+        add_spans(ax, right_real, args.read_id, COL_REAL_RIGHT, "Real right fork")
+        add_spans(ax, ori_real,   args.read_id, COL_REAL_ORI,   "Real ORI")
     ax.set_ylabel("BrdU signal")
     ax.set_title(f"Read {args.read_id}  |  threshold={args.threshold}", fontsize=10)
     ax.legend(loc="upper right", ncol=4, fontsize=8)
     ax.set_ylim(bottom=0)
     ax.grid(alpha=0.2)
 
-    # Panel 1: real annotation bar
+    # Panel 1: annotation bar (solid = human, hatched = pseudo)
     ax = axes[1]
     ax.set_ylabel("GT", fontsize=8, rotation=0, labelpad=30, va="center")
     ax.set_yticks([])
     ax.set_ylim(0, 1)
     ax.grid(alpha=0.15, axis="x")
-    for df, color, y0, y1 in [
-        (left_real,  COL_REAL_LEFT,  0.68, 0.98),
-        (right_real, COL_REAL_RIGHT, 0.34, 0.64),
-        (ori_real,   COL_REAL_ORI,   0.02, 0.32),
+    for df_all, df_h, color, y0, y1 in [
+        (left_real,  left_human,  COL_REAL_LEFT,  0.68, 0.98),
+        (right_real, right_human, COL_REAL_RIGHT, 0.34, 0.64),
+        (ori_real,   ori_human,   COL_REAL_ORI,   0.02, 0.32),
     ]:
-        subset = df[df["read_id"] == args.read_id]
+        subset = df_all[df_all["read_id"] == args.read_id]
         for row in subset.itertuples(index=False):
+            human = show_human_pseudo and _is_human(df_h, args.read_id, int(row.start), int(row.end))
+            hatch = None if human else "////"
             ax.axvspan(int(row.start), int(row.end), ymin=y0, ymax=y1,
-                       color=color, alpha=0.6)
-    handles = [mpatches.Patch(color=COL_REAL_LEFT,  label="L"),
-               mpatches.Patch(color=COL_REAL_RIGHT, label="R"),
-               mpatches.Patch(color=COL_REAL_ORI,   label="ORI")]
-    ax.legend(handles=handles, loc="upper right", ncol=3, fontsize=7, framealpha=0.7)
+                       color=color, alpha=0.7 if human else 0.35,
+                       hatch=hatch, edgecolor=color if hatch else None)
+    if show_human_pseudo:
+        handles = [
+            mpatches.Patch(color=COL_REAL_LEFT,  label="L human"),
+            mpatches.Patch(color=COL_REAL_LEFT,  label="L pseudo", hatch="////", alpha=0.5),
+            mpatches.Patch(color=COL_REAL_RIGHT, label="R human"),
+            mpatches.Patch(color=COL_REAL_RIGHT, label="R pseudo", hatch="////", alpha=0.5),
+            mpatches.Patch(color=COL_REAL_ORI,   label="ORI human"),
+            mpatches.Patch(color=COL_REAL_ORI,   label="ORI pseudo", hatch="////", alpha=0.5),
+        ]
+        ax.legend(handles=handles, loc="upper right", ncol=6, fontsize=6, framealpha=0.7)
+    else:
+        handles = [mpatches.Patch(color=COL_REAL_LEFT,  label="L"),
+                   mpatches.Patch(color=COL_REAL_RIGHT, label="R"),
+                   mpatches.Patch(color=COL_REAL_ORI,   label="ORI")]
+        ax.legend(handles=handles, loc="upper right", ncol=3, fontsize=7, framealpha=0.7)
 
     # Panels 2+ : probability track + event span bar, one pair per model
     PROB_COLS = {
@@ -243,17 +296,26 @@ def main():
                 for row in match[0][2].itertuples(index=False):
                     ax_ev.axvspan(int(row.start), int(row.end), ymin=y0, ymax=y1,
                                   color=class_col, alpha=0.55)
-                    # annotate with signal stat
                     mid = (int(row.start) + int(row.end)) / 2
                     yc  = (y0 + y1) / 2
                     if class_name == "origin" and hasattr(row, "mean_brdu_signal") and not np.isnan(row.mean_brdu_signal):
                         ax_ev.text(mid, yc, f"BrdU={row.mean_brdu_signal:.3f}",
                                    ha="center", va="center", fontsize=5.5,
                                    color="white", fontweight="bold", clip_on=True)
-                    elif class_name in ("left_fork", "right_fork") and hasattr(row, "brdu_slope") and not np.isnan(row.brdu_slope):
-                        ax_ev.text(mid, yc, f"slope={row.brdu_slope:.2e}",
-                                   ha="center", va="center", fontsize=5.5,
-                                   color="white", fontweight="bold", clip_on=True)
+                    elif class_name in ("left_fork", "right_fork"):
+                        # Draw the BrdU slope as a fitted line on the signal panel
+                        mask = (xy["start"] >= int(row.start)) & (xy["start"] < int(row.end))
+                        seg = xy[mask].sort_values("start")
+                        if len(seg) >= 2:
+                            xs = seg["start"].to_numpy()
+                            ys = seg["signal"].to_numpy()
+                            slope, intercept = np.polyfit(xs, ys, 1)
+                            axes[0].plot(
+                                [xs[0], xs[-1]],
+                                [slope * xs[0] + intercept, slope * xs[-1] + intercept],
+                                color=class_col, linewidth=2.5, linestyle="--", alpha=0.9,
+                                zorder=5,
+                            )
 
         handles = [mpatches.Patch(color=COL_REAL_LEFT,  label="pred L"),
                    mpatches.Patch(color=COL_REAL_RIGHT, label="pred R"),
