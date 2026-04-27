@@ -165,12 +165,29 @@ def main():
 
         tf.keras.backend.clear_session()
 
+    # ── Per-model GT annotation sets ──────────────────────────────────────────
+    # Each model uses its own training BED files (from its config).
+    # Human-only BED files (--human-*-bed) are used to distinguish solid vs hatched.
+    model_gt = []   # list of (lf_df, rf_df, ori_df) one per model
+    for i, model_path in enumerate(args.model):
+        if args.model_config and i < len(args.model_config):
+            with open(args.model_config[i]) as fh:
+                mc = yaml.safe_load(fh)
+            cfg = mc["data"]
+        else:
+            cfg = config["data"]
+        model_gt.append((
+            load_bed(cfg.get("left_forks_bed")),
+            load_bed(cfg.get("right_forks_bed")),
+            load_bed(cfg.get("ori_annotations_bed")),
+        ))
+
     # ── PLOT ──────────────────────────────────────────────────────────────────
-    # Layout: signal | real_annot | [prob_model] x n | [events_model] x n
+    # Layout: signal | [GT + prob + events] x n_models
     n_models = len(args.model)
-    n_rows = 2 + 2 * n_models   # signal + real + (prob + events) per model
-    height_ratios = [3, 0.6] + [2, 0.7] * n_models
-    fig, axes = plt.subplots(n_rows, 1, figsize=(16, 4 + 2.5 * n_models + 1),
+    n_rows = 1 + 3 * n_models   # signal + (GT + prob + events) per model
+    height_ratios = [3] + [0.6, 2, 0.7] * n_models
+    fig, axes = plt.subplots(n_rows, 1, figsize=(16, 3 + 3.3 * n_models + 1),
                               sharex=True, height_ratios=height_ratios,
                               gridspec_kw={"hspace": 0.08})
 
@@ -178,90 +195,68 @@ def main():
     y = xy["signal"].to_numpy()
 
     def _is_human(df_human, read_id, start, end):
-        """True if interval overlaps any human annotation for this read."""
         for row in df_human[df_human["read_id"] == read_id].itertuples(index=False):
             if start < int(row.end) and end > int(row.start):
                 return True
         return False
 
-    def add_spans_human_pseudo(ax, df_all, df_human, read_id, color, label_h, label_p, alpha=0.35):
-        """Draw solid spans for human annotations, hatched for pseudo-labels."""
-        subset = df_all[df_all["read_id"] == read_id]
-        used_h, used_p = False, False
-        for row in subset.itertuples(index=False):
-            human = _is_human(df_human, read_id, int(row.start), int(row.end))
-            lbl = (label_h if not used_h else None) if human else (label_p if not used_p else None)
-            hatch = None if human else "////"
-            ax.axvspan(int(row.start), int(row.end), color=color,
-                       alpha=alpha if human else alpha * 0.6,
-                       hatch=hatch, edgecolor=color if hatch else None, label=lbl)
-            if human: used_h = True
-            else:     used_p = True
-
-    # Panel 0: BrdU signal + GT spans
+    # Panel 0: BrdU signal only
     ax = axes[0]
     ax.step(x, y, where="post", color="black", linewidth=1.2, label="BrdU signal")
     ax.fill_between(x, y, step="post", alpha=0.12, color="gray")
-    if show_human_pseudo:
-        add_spans_human_pseudo(ax, left_real,  left_human,  args.read_id, COL_REAL_LEFT,  "LF (human)", "LF (pseudo)")
-        add_spans_human_pseudo(ax, right_real, right_human, args.read_id, COL_REAL_RIGHT, "RF (human)", "RF (pseudo)")
-        add_spans_human_pseudo(ax, ori_real,   ori_human,   args.read_id, COL_REAL_ORI,   "ORI (human)", "ORI (pseudo)")
-    else:
-        add_spans(ax, left_real,  args.read_id, COL_REAL_LEFT,  "Real left fork")
-        add_spans(ax, right_real, args.read_id, COL_REAL_RIGHT, "Real right fork")
-        add_spans(ax, ori_real,   args.read_id, COL_REAL_ORI,   "Real ORI")
     ax.set_ylabel("BrdU signal")
     ax.set_title(f"Read {args.read_id}  |  threshold={args.threshold}", fontsize=10)
-    ax.legend(loc="upper right", ncol=4, fontsize=8)
+    ax.legend(loc="upper right", fontsize=8)
     ax.set_ylim(bottom=0)
     ax.grid(alpha=0.2)
 
-    # Panel 1: annotation bar (solid = human, hatched = pseudo)
-    ax = axes[1]
-    ax.set_ylabel("GT", fontsize=8, rotation=0, labelpad=30, va="center")
-    ax.set_yticks([])
-    ax.set_ylim(0, 1)
-    ax.grid(alpha=0.15, axis="x")
-    for df_all, df_h, color, y0, y1 in [
-        (left_real,  left_human,  COL_REAL_LEFT,  0.68, 0.98),
-        (right_real, right_human, COL_REAL_RIGHT, 0.34, 0.64),
-        (ori_real,   ori_human,   COL_REAL_ORI,   0.02, 0.32),
-    ]:
-        subset = df_all[df_all["read_id"] == args.read_id]
-        for row in subset.itertuples(index=False):
-            human = show_human_pseudo and _is_human(df_h, args.read_id, int(row.start), int(row.end))
-            hatch = None if human else "////"
-            ax.axvspan(int(row.start), int(row.end), ymin=y0, ymax=y1,
-                       color=color, alpha=0.7 if human else 0.35,
-                       hatch=hatch, edgecolor=color if hatch else None)
-    if show_human_pseudo:
-        handles = [
-            mpatches.Patch(color=COL_REAL_LEFT,  label="L human"),
-            mpatches.Patch(color=COL_REAL_LEFT,  label="L pseudo", hatch="////", alpha=0.5),
-            mpatches.Patch(color=COL_REAL_RIGHT, label="R human"),
-            mpatches.Patch(color=COL_REAL_RIGHT, label="R pseudo", hatch="////", alpha=0.5),
-            mpatches.Patch(color=COL_REAL_ORI,   label="ORI human"),
-            mpatches.Patch(color=COL_REAL_ORI,   label="ORI pseudo", hatch="////", alpha=0.5),
-        ]
-        ax.legend(handles=handles, loc="upper right", ncol=6, fontsize=6, framealpha=0.7)
-    else:
-        handles = [mpatches.Patch(color=COL_REAL_LEFT,  label="L"),
-                   mpatches.Patch(color=COL_REAL_RIGHT, label="R"),
-                   mpatches.Patch(color=COL_REAL_ORI,   label="ORI")]
-        ax.legend(handles=handles, loc="upper right", ncol=3, fontsize=7, framealpha=0.7)
-
-    # Panels 2+ : probability track + event span bar, one pair per model
+    # Panels 1+ : GT bar + probability track + event span bar, one triple per model
     PROB_COLS = {
         "left_fork":  COL_REAL_LEFT,
         "right_fork": COL_REAL_RIGHT,
         "origin":     COL_REAL_ORI,
     }
     for m_idx, (model_path, model_name) in enumerate(zip(args.model, model_names)):
-        col = MODEL_COLOURS[m_idx % len(MODEL_COLOURS)]
+        lf_gt, rf_gt, ori_gt = model_gt[m_idx]
+
+        # ── GT bar for this model ──
+        ax_gt = axes[1 + 3 * m_idx]
+        ax_gt.set_ylabel(f"{model_name}\nGT", fontsize=8, rotation=0, labelpad=40, va="center")
+        ax_gt.set_yticks([])
+        ax_gt.set_ylim(0, 1)
+        ax_gt.grid(alpha=0.15, axis="x")
+        for df_all, df_h, color, y0, y1 in [
+            (lf_gt,  left_human,  COL_REAL_LEFT,  0.68, 0.98),
+            (rf_gt,  right_human, COL_REAL_RIGHT, 0.34, 0.64),
+            (ori_gt, ori_human,   COL_REAL_ORI,   0.02, 0.32),
+        ]:
+            subset = df_all[df_all["read_id"] == args.read_id]
+            for row in subset.itertuples(index=False):
+                human = show_human_pseudo and _is_human(df_h, args.read_id, int(row.start), int(row.end))
+                hatch = None if human else "////"
+                ax_gt.axvspan(int(row.start), int(row.end), ymin=y0, ymax=y1,
+                              color=color, alpha=0.7 if human else 0.4,
+                              hatch=hatch, edgecolor=color if hatch else None)
+        if show_human_pseudo:
+            handles = [
+                mpatches.Patch(color=COL_REAL_LEFT,  label="LF hum"),
+                mpatches.Patch(color=COL_REAL_LEFT,  label="LF pseudo", hatch="////", alpha=0.5),
+                mpatches.Patch(color=COL_REAL_RIGHT, label="RF hum"),
+                mpatches.Patch(color=COL_REAL_RIGHT, label="RF pseudo", hatch="////", alpha=0.5),
+                mpatches.Patch(color=COL_REAL_ORI,   label="ORI hum"),
+                mpatches.Patch(color=COL_REAL_ORI,   label="ORI pseudo", hatch="////", alpha=0.5),
+            ]
+            ax_gt.legend(handles=handles, loc="upper right", ncol=6, fontsize=6, framealpha=0.7)
+        else:
+            handles = [mpatches.Patch(color=COL_REAL_LEFT,  label="L"),
+                       mpatches.Patch(color=COL_REAL_RIGHT, label="R"),
+                       mpatches.Patch(color=COL_REAL_ORI,   label="ORI")]
+            ax_gt.legend(handles=handles, loc="upper right", ncol=3, fontsize=7, framealpha=0.7)
+
         preds = all_preds.get(model_name)
 
         # ── probability track panel ──
-        ax_prob = axes[2 + 2 * m_idx]
+        ax_prob = axes[2 + 3 * m_idx]
         ax_prob.set_ylabel(f"{model_name}\nprob", fontsize=8, rotation=0, labelpad=40, va="center")
         ax_prob.set_ylim(0, 1)
         ax_prob.axhline(args.threshold, color="gray", lw=0.8, ls="--", alpha=0.7,
@@ -280,7 +275,7 @@ def main():
         ax_prob.legend(loc="upper right", ncol=4, fontsize=7, framealpha=0.85)
 
         # ── predicted event span bar ──
-        ax_ev = axes[3 + 2 * m_idx]
+        ax_ev = axes[3 + 3 * m_idx]
         ax_ev.set_ylabel(f"{model_name}\nevents", fontsize=8, rotation=0, labelpad=40, va="center")
         ax_ev.set_yticks([])
         ax_ev.set_ylim(0, 1)
