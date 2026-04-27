@@ -71,22 +71,21 @@ def resolve_window_conflicts(
     threshold_map: dict,
     priority_class: str = "origin",
 ) -> pd.DataFrame:
-    """Resolve windows where multiple classes exceed their probability threshold.
+    """Suppress ambiguous windows where multiple classes exceed their threshold.
 
-    For each window claimed by 2+ classes, one class wins and the others are
-    suppressed (prob set to 0.0).  Priority rule:
-      1. ``priority_class`` wins if it is one of the tied classes.
-      2. Otherwise the class with the highest probability wins.
+    For each window claimed by 2+ classes, all event-class probabilities are
+    zeroed out — the window is treated as background.  Ambiguous windows carry
+    no reliable signal so claiming any winner would add noise to event calls.
 
     Args:
         predictions:    DataFrame from predict_reads() with prob_{class} columns.
         threshold_map:  {class_name: prob_threshold} — same map used by reannotation.
-        priority_class: Class name that always beats others in a tie (default "origin").
+        priority_class: Kept for API compatibility; no longer used.
 
     Returns:
-        Copy of predictions with prob columns zeroed out for losing classes on
-        conflict windows.  The raw segments TSV should be saved *before* calling
-        this function so the original probabilities are preserved there.
+        Copy of predictions with all event-class prob columns zeroed on conflict
+        windows.  The raw segments TSV should be saved *before* calling this
+        function so the original probabilities are preserved there.
     """
     pred = predictions.copy()
     event_classes = [c for c in threshold_map if f"prob_{c}" in pred.columns]
@@ -94,26 +93,18 @@ def resolve_window_conflicts(
     # Boolean mask per class: does this window exceed its threshold?
     masks = {c: pred[f"prob_{c}"] >= threshold_map[c] for c in event_classes}
 
-    # Windows where 2+ classes are active
+    # Windows where 2+ classes are active — zero ALL event classes
     n_active = sum(m.astype(int) for m in masks.values())
     conflict_idx = n_active[n_active >= 2].index
 
     if len(conflict_idx) == 0:
         return pred
 
-    for idx in conflict_idx:
-        active = [c for c in event_classes if masks[c].at[idx]]
-        if priority_class in active:
-            winner = priority_class
-        else:
-            winner = max(active, key=lambda c: pred.at[idx, f"prob_{c}"])
-        for c in active:
-            if c != winner:
-                pred.at[idx, f"prob_{c}"] = 0.0
+    for c in event_classes:
+        pred.loc[conflict_idx, f"prob_{c}"] = 0.0
 
-    n_resolved = len(conflict_idx)
-    print(f"resolve_window_conflicts: resolved {n_resolved:,} conflict windows "
-          f"(priority='{priority_class}')")
+    print(f"resolve_window_conflicts: suppressed {len(conflict_idx):,} ambiguous windows "
+          f"(all event classes zeroed)")
     return pred
 
 
