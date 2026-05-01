@@ -39,6 +39,8 @@ def _sample_partition_read_ids(
     large_ori_oversample_ratio: float = 0.0,
     null_brdu_ori_read_ids: List[str] | None = None,
     null_brdu_ori_oversample_ratio: float = 0.0,
+    multi_ori_read_ids: List[str] | None = None,
+    multi_ori_oversample_ratio: float = 0.0,
 ) -> List[str]:
     read_ids = partition_manifest["read_id"].tolist()
     if split_name != "train":
@@ -87,6 +89,17 @@ def _sample_partition_read_ids(
             print(f"  Null-BrdU ORI oversampling: +{n_extra_null} copies from {len(null_in_split)} reads "
                   f"(ratio={null_brdu_ori_oversample_ratio})")
 
+    # Reads with multiple ORIs per molecule — the model rarely sees the
+    # "multiple narrow peaks" pattern, so it never learns to separate them.
+    if multi_ori_read_ids and multi_ori_oversample_ratio > 0:
+        split_ids = set(partition_manifest["read_id"])
+        multi_in_split = [r for r in multi_ori_read_ids if r in split_ids]
+        if multi_in_split:
+            n_extra_multi = int(len(multi_in_split) * multi_ori_oversample_ratio)
+            sampled.extend(rng.choice(multi_in_split, size=n_extra_multi, replace=True).tolist())
+            print(f"  Multi-ORI oversampling: +{n_extra_multi} copies from {len(multi_in_split)} reads "
+                  f"(ratio={multi_ori_oversample_ratio})")
+
     if background_ids:
         target_background = min(len(background_ids), max(len(sampled), 1))
         sampled.extend(rng.choice(background_ids, size=target_background, replace=False).tolist())
@@ -133,6 +146,7 @@ def prepare_partition_data(
     small_ori_read_ids: List[str] | None = None,
     large_ori_read_ids: List[str] | None = None,
     null_brdu_ori_read_ids: List[str] | None = None,
+    multi_ori_read_ids: List[str] | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int, pd.DataFrame]:
     """Prepare one split using weak labels and shared representation logic."""
     partition_manifest = manifest[manifest["split"] == split_name].copy()
@@ -153,6 +167,8 @@ def prepare_partition_data(
         large_ori_oversample_ratio=preprocessing_config.get("large_ori_oversample_ratio", 0.0),
         null_brdu_ori_read_ids=null_brdu_ori_read_ids,
         null_brdu_ori_oversample_ratio=preprocessing_config.get("null_brdu_ori_oversample_ratio", 0.0),
+        multi_ori_read_ids=multi_ori_read_ids,
+        multi_ori_oversample_ratio=preprocessing_config.get("multi_ori_oversample_ratio", 0.0),
     )
     print(f"Reads processed after sampling policy: {len(sampled_read_ids):,}")
 
@@ -284,6 +300,7 @@ def train_weak5_model(config: dict):
     small_ori_reads: List[str] = []
     large_ori_reads: List[str] = []
     null_brdu_ori_reads: List[str] = []
+    multi_ori_reads: List[str] = []
     if len(origins) > 0:
         ori_lens = origins["end"] - origins["start"]
         if config["preprocessing"].get("small_ori_oversample_ratio", 0.0) > 0:
@@ -309,6 +326,12 @@ def train_weak5_model(config: dict):
             print(f"  Null-BrdU ORI reads (no forks, mean BrdU < {null_brdu_max_mean}): "
                   f"{len(null_brdu_ori_reads):,} "
                   f"(oversample ratio: {config['preprocessing']['null_brdu_ori_oversample_ratio']}×)")
+        if config["preprocessing"].get("multi_ori_oversample_ratio", 0.0) > 0:
+            multi_ori_min = config["preprocessing"].get("multi_ori_min_count", 2)
+            ori_counts = origins.groupby("read_id").size()
+            multi_ori_reads = list(ori_counts[ori_counts >= multi_ori_min].index)
+            print(f"  Multi-ORI reads (≥{multi_ori_min} ORIs per molecule): {len(multi_ori_reads):,} "
+                  f"(oversample ratio: {config['preprocessing']['multi_ori_oversample_ratio']}×)")
 
     print("\n[4/7] Preparing training tensors...")
     train_x, train_y, train_w, max_length, train_info = prepare_partition_data(
@@ -322,6 +345,7 @@ def train_weak5_model(config: dict):
         small_ori_read_ids=small_ori_reads,
         large_ori_read_ids=large_ori_reads,
         null_brdu_ori_read_ids=null_brdu_ori_reads,
+        multi_ori_read_ids=multi_ori_reads,
     )
     print("\n[5/7] Preparing validation tensors...")
     val_x, val_y, val_w, _, val_info = prepare_partition_data(
@@ -332,7 +356,8 @@ def train_weak5_model(config: dict):
         preprocessing_config={**config["preprocessing"], "oversample_ratio": 0.0,
                               "small_ori_oversample_ratio": 0.0,
                               "large_ori_oversample_ratio": 0.0,
-                              "null_brdu_ori_oversample_ratio": 0.0, "max_length": max_length},
+                              "null_brdu_ori_oversample_ratio": 0.0,
+                              "multi_ori_oversample_ratio": 0.0, "max_length": max_length},
         labeling_config=config["labeling"],
         random_seed=config["training"].get("random_seed", 42),
     )

@@ -1,27 +1,25 @@
-experiment_name: "forte_v6.0"
+experiment_name: "forte_v6.1"
 
-# FORTE v6.0 — slope channel + read-level BrdU + null-BrdU ORI oversampling
+# FORTE v6.1 — multi-ORI oversampling + boosted small-ORI oversampling
 #
-# Key changes vs v5.4:
+# Key changes vs v6.0:
 #
-#   1. Encoding: 9 → 11 channels
-#      - Channel 10: local slope (gradient of heavily smoothed signal).
-#        Positive = rising left→right (right fork), negative = falling (left fork),
-#        ~0 = flat signal (ORI / background). Gives the model an explicit slope signal
-#        it was previously inferring implicitly from cumsum + wavelet details.
-#      - Channel 11: read-level mean BrdU (constant per read).
-#        Null-BrdU reads (mean ≈ 0) are distinguished from normal reads (mean 0.3-0.8).
-#        This is the key feature for detecting d4586c03-type reads.
+#   1. Multi-ORI oversampling (NEW)
+#      - Reads with ≥2 human ORI annotations are oversampled 3×.
+#      - Reads with ≥3 human ORI annotations are additionally oversampled 5×.
+#      - Motivation: the model outputs broad plateaus instead of separable peaks
+#        when multiple ORIs exist on the same molecule. These reads are ~15% of
+#        human-annotated reads but contribute disproportionately to the missed
+#        narrow-valley / multiple-ORI problem.
 #
-#   2. Null-BrdU ORI oversampling
-#      - Reads with ORI annotations, NO fork annotations, and mean BrdU < 0.05 are
-#        heavily oversampled (ratio 3.0×). These are the reads the model confuses with RF.
+#   2. Increased small-ORI oversampling (2× → 4×)
+#      - ≤2kb ORIs now oversampled at 4× instead of 2×.
+#      - Motivation: ≤1kb ORIs (46% of human GT) are only detected at 43% rate
+#        in v6.0. These are the dominant source of missed ORIs.
 #
-#   3. Slope filter in reannotation
-#      - Fork events with |brdu_slope| < 5e-6 BrdU/bp are suppressed post-hoc.
-#        Real forks have |slope| ~ 1e-5 to 3e-5; flat events are null-BrdU misclassifications.
-#
-# Must train from scratch (re-encode) — 11-channel tensors are incompatible with v5.4 npz.
+#   3. All other settings identical to v6.0 (11 channels, null-BrdU oversampling).
+#      Must re-encode (no saved .npz from v6.0 — different oversample policy
+#      changes which reads are repeated in training tensors).
 
 data:
   base_dir: "/mnt/ssd-4tb/crisanto_project/data_2025Oct/data_reads_minLen30000_nascent40"
@@ -35,7 +33,6 @@ data:
   ori_annotations_bed: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/training_labels/human_origin_clean.bed"
   termination_annotations_bed:
   xy_cache_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/cache/xy_data.pkl"
-  save_preprocessed_dataset_path: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v6.0/preprocessed_forte_v6.0.npz"
   split_manifest: "/mnt/ssd-4tb/crisanto_project/AI_annotation/replication-analyzer/CODEX/results/forte_v5.1/split_manifest.tsv"
 
 preprocessing:
@@ -47,13 +44,20 @@ preprocessing:
   wavelet_level: 2
   percentile: 100
   oversample_ratio: 0.5
-  small_ori_oversample_ratio: 2.0
+  # Small ORI oversampling — boosted vs v6.0 (2× → 4×)
+  small_ori_oversample_ratio: 4.0
   small_ori_max_bp: 2000
+  # Large ORI oversampling — unchanged
   large_ori_oversample_ratio: 2.0
   large_ori_min_bp: 20000
-  null_brdu_ori_oversample_ratio: 3.0   # NEW: heavily oversample null-BrdU ORI reads
-  null_brdu_ori_max_mean: 0.05          # NEW: reads with mean BrdU < 0.05 qualify
-  extra_channels: true                  # NEW: enable slope + read-level mean BrdU channels
+  # Null-BrdU ORI oversampling — unchanged from v6.0
+  null_brdu_ori_oversample_ratio: 3.0
+  null_brdu_ori_max_mean: 0.05
+  # Multi-ORI oversampling — NEW
+  multi_ori_oversample_ratio: 3.0   # reads with ≥ multi_ori_min_count human ORIs
+  multi_ori_min_count: 2            # start from 2+ ORIs per molecule
+  # Encoding — unchanged from v6.0
+  extra_channels: true              # 11 channels (slope + read-level mean BrdU)
   encode_chunk_size: 1000
   flip_augment: true
 
@@ -63,7 +67,7 @@ labeling:
 
 model:
   n_classes: 4
-  n_channels: 11          # NEW: was 9
+  n_channels: 11
   cnn_filters: 64
   lstm_units: 128
   dropout_rate: 0.3863
@@ -128,5 +132,5 @@ reannotation:
 
 output:
   model_dir: "CODEX/models"
-  model_filename: "forte_v6.0.keras"
-  results_dir: "CODEX/results/forte_v6.0"
+  model_filename: "forte_v6.1.keras"
+  results_dir: "CODEX/results/forte_v6.1"
